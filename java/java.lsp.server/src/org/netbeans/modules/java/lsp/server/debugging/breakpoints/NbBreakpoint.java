@@ -19,6 +19,7 @@
 package org.netbeans.modules.java.lsp.server.debugging.breakpoints;
 
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,6 +36,7 @@ import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.api.debugger.jpda.LineBreakpoint;
 import org.netbeans.modules.debugger.jpda.truffle.breakpoints.TruffleLineBreakpoint;
 import org.netbeans.modules.java.lsp.server.debugging.DebugAdapterContext;
+import org.openide.filesystems.URLMapper;
 
 /**
  *
@@ -56,6 +58,15 @@ public final class NbBreakpoint {
 
     public NbBreakpoint(Source source, String sourceURL, int line, int hitCount, String condition, String logMessage, DebugAdapterContext context) {
         this.source = source;
+        Integer ref = source.getSourceReference();
+        if (ref != null && ref != 0) {
+            URI uri = context.getSourceUri(ref);
+            if (uri != null) {
+                try {
+                    sourceURL = uri.toURL().toString();
+                } catch (MalformedURLException ex) {}
+            }
+        }
         this.sourceURL = sourceURL;
         this.line = line;
         this.hitCount = hitCount;
@@ -87,8 +98,16 @@ public final class NbBreakpoint {
 
     public CompletableFuture<NbBreakpoint> install() {
         Breakpoint breakpoint;
-        if (sourceURL.toLowerCase().endsWith(".java")) {
-            LineBreakpoint b = LineBreakpoint.create(sourceURL, line);
+        String sourceURLLower = sourceURL.toLowerCase();
+        boolean isJava = sourceURLLower.endsWith(".java");      // NOI18N
+        boolean isGroovy = sourceURLLower.endsWith(".groovy");  // NOI18N
+        if (isJava || isGroovy) {
+            LineBreakpoint b;
+            if (isJava) {
+                b = LineBreakpoint.create(sourceURL, line);
+            } else {
+                b = GroovyBreakpointFactory.create(sourceURL, line);
+            }
             if (condition != null && !condition.isEmpty()) {
                 b.setCondition(condition);
             }
@@ -116,9 +135,9 @@ public final class NbBreakpoint {
         breakpoint.addPropertyChangeListener(Breakpoint.PROP_VALIDITY, evt -> {
             updateValid(breakpoint, true);
         });
-        updateValid(breakpoint, false);
         DebuggerManager d = DebuggerManager.getDebuggerManager();
         d.addBreakpoint(breakpoint);
+        updateValid(breakpoint, false);
         this.breakpoint = breakpoint;
         return CompletableFuture.completedFuture(this);
     }
