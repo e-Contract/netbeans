@@ -21,40 +21,34 @@ package org.netbeans.modules.subversion.util;
 
 import java.awt.Color;
 import java.awt.EventQueue;
-import java.net.MalformedURLException;
-import org.netbeans.modules.subversion.client.SvnClient;
-import org.openide.nodes.Node;
-import org.openide.windows.TopComponent;
-import org.openide.util.Lookup;
-import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.FileObject;
-import org.netbeans.api.project.*;
-import org.netbeans.api.queries.SharabilityQuery;
-import org.netbeans.modules.subversion.FileStatusCache;
-import org.netbeans.modules.subversion.Subversion;
-import org.netbeans.modules.subversion.FileInformation;
 import java.io.*;
-import java.io.File;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
+import java.net.MalformedURLException;
 import java.text.MessageFormat;
-import java.util.*;
 import java.text.ParseException;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import java.util.stream.Collectors;
+
 import org.netbeans.api.editor.mimelookup.MimePath;
+import org.netbeans.api.project.*;
+import org.netbeans.api.project.ui.OpenProjects;
+import org.netbeans.api.queries.SharabilityQuery;
 import org.netbeans.modules.subversion.*;
 import org.netbeans.modules.subversion.client.PropertiesClient;
+import org.netbeans.modules.subversion.client.SvnClient;
 import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
 import org.netbeans.modules.subversion.client.SvnProgressSupport;
 import org.netbeans.modules.subversion.options.AnnotationExpression;
 import org.netbeans.modules.subversion.ui.commit.CommitOptions;
 import org.netbeans.modules.subversion.ui.diff.Setup;
 import org.netbeans.modules.subversion.ui.history.SearchHistoryAction;
+import org.netbeans.modules.subversion.ui.repository.RepositoryConnection;
 import org.netbeans.modules.versioning.spi.VCSContext;
 import org.netbeans.modules.versioning.spi.VersioningSupport;
 import org.netbeans.modules.versioning.util.FileSelector;
@@ -63,11 +57,16 @@ import org.netbeans.modules.versioning.util.ProjectUtilities;
 import org.netbeans.modules.versioning.util.Utils;
 import org.openide.cookies.EditorCookie;
 import org.openide.cookies.SaveCookie;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
+import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
+import org.openide.windows.TopComponent;
 import org.tigris.subversion.svnclientadapter.*;
 import org.tigris.subversion.svnclientadapter.utils.SVNUrlUtils;
 
@@ -389,7 +388,7 @@ public class SvnUtils {
             }
         }
         files.remove(null);
-        return files.toArray(new File[files.size()]);
+        return files.toArray(new File[0]);
     }
 
     /**
@@ -900,7 +899,7 @@ public class SvnUtils {
      * @return
      */
     public static String fixLineEndings(String text) {
-        return text.replaceAll("\r\n", "\n").replace('\r', '\n');
+        return text.replace("\r\n", "\n").replace('\r', '\n');
     }
 
     public static boolean hasMetadata (File file) {
@@ -1008,7 +1007,7 @@ public class SvnUtils {
             }
             os = fo.getOutputStream();
             is = FileUtil.toFileObject(oldFile).getInputStream();
-            FileUtil.copy(is, os);
+            is.transferTo(os);
         } catch (IOException e) {
             if (refersToDirectory(e)) {
                 Subversion.LOG.log(Level.FINE, null, e);
@@ -1098,7 +1097,7 @@ public class SvnUtils {
             }
         }
 
-        return ret.toArray(new File[ret.size()]);
+        return ret.toArray(new File[0]);
     }
 
     /**
@@ -1129,7 +1128,7 @@ public class SvnUtils {
                 files.add(file);
             }
         }
-        return files.toArray(new File[files.size()]);
+        return files.toArray(new File[0]);
     }
 
 
@@ -1529,7 +1528,7 @@ public class SvnUtils {
             }
         }
         if (!sorted) {
-            Collections.sort(ret, new Comparator<ISVNLogMessage>() {
+            ret.sort(new Comparator<ISVNLogMessage>() {
                 @Override
                 public int compare(ISVNLogMessage m1, ISVNLogMessage m2) {
                     long revNum1 = m1.getRevision().getNumber();
@@ -1539,7 +1538,7 @@ public class SvnUtils {
                 }
             });
         }
-        return ret.toArray(new ISVNLogMessage[ret.size()]);
+        return ret.toArray(new ISVNLogMessage[0]);
     }
 
     private static Logger TY9_LOG = null;
@@ -1576,7 +1575,7 @@ public class SvnUtils {
             }
         }
 
-        roots = l.toArray(new File[l.size()]);
+        roots = l.toArray(new File[0]);
         if(Utils.shareCommonDataObject(roots)) {
             return roots;
         }
@@ -1794,7 +1793,7 @@ public class SvnUtils {
             Subversion.getInstance().getParallelRequestProcessor().post(new Runnable() {
                 @Override
                 public void run() {
-                    FileUtil.refreshFor(parents.toArray(new File[parents.size()]));
+                    FileUtil.refreshFor(parents.toArray(new File[0]));
                 }
             }, 100);
         }
@@ -1802,7 +1801,7 @@ public class SvnUtils {
 
     static ThreadLocal<Set<File>> indexingFiles = new ThreadLocal<Set<File>>();
     public static <T> T runWithoutIndexing (Callable<T> callable, List<File> files) throws SVNClientException {
-        return runWithoutIndexing(callable, files.toArray(new File[files.size()]));
+        return runWithoutIndexing(callable, files.toArray(new File[0]));
     }
 
     public static <T> T runWithoutIndexing (Callable<T> callable, File... files) throws SVNClientException {
@@ -1861,5 +1860,49 @@ public class SvnUtils {
             hex = "0" + hex; //NOI18N
         }
         return hex;
+    }
+
+    /**
+     * Returns all known repository root connections from recent URLs and opened SVN projects.
+     *
+     * @return a set of all known repository connections
+     */
+    public static Set<RepositoryConnection> getKnownRepositoryRoots() {
+        List<RepositoryConnection> recentUrls = SvnModuleConfig.getDefault().getRecentUrls();
+        final Set<RepositoryConnection> recentRoots = new LinkedHashSet<>(recentUrls);
+        addProjects(recentRoots);
+        return recentRoots;
+    }
+
+    /**
+     * Returns all known repository URLs as strings.
+     *
+     * @return a list of (distinct) known repository URLs
+     */
+    public static List<String> getKnownRepositoryUrls() {
+        return getKnownRepositoryRoots().stream()
+                .map(RepositoryConnection::getUrl)
+                .filter(u -> u != null && !u.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    private static void addProjects(final Set<RepositoryConnection> recentRoots) {
+        for (Project p : OpenProjects.getDefault().getOpenProjects()) {
+            File projectFolder = FileUtil.toFile(p.getProjectDirectory());
+            if (projectFolder != null && isManaged(projectFolder)) {
+                try {
+                    SVNUrl repositoryUrl = getRepositoryRootUrl(projectFolder);
+                    if (repositoryUrl != null) {
+                        RepositoryConnection rc = new RepositoryConnection(repositoryUrl.toString());
+                        if (!recentRoots.contains(rc)) {
+                            recentRoots.add(rc);
+                        }
+                    }
+                } catch (SVNClientException ex) {
+                    Logger.getLogger(SvnUtils.class.getName()).log(Level.FINE, null, ex);
+                }
+            }
+        }
     }
 }

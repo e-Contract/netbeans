@@ -19,6 +19,7 @@
 package org.netbeans.modules.lsp.client;
 
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -62,7 +63,7 @@ public class UtilsTest extends NbTestCase {
                        "0123456789\n" +
                        "0123456789\n" +
                        "0123456789\n" +
-                       "0123456789\n").getBytes("UTF-8"));
+                       "0123456789\n").getBytes(StandardCharsets.UTF_8));
         }
         FileObject sourceFile2 = wd.createData("Test2.txt");
         try (OutputStream out = sourceFile2.getOutputStream()) {
@@ -70,7 +71,7 @@ public class UtilsTest extends NbTestCase {
                        "0123456789\n" +
                        "0123456789\n" +
                        "0123456789\n" +
-                       "0123456789\n").getBytes("UTF-8"));
+                       "0123456789\n").getBytes(StandardCharsets.UTF_8));
         }
         Map<String, List<TextEdit>> changes = new HashMap<>();
         changes.put(Utils.toURI(sourceFile1), Arrays.asList(new TextEdit(new Range(new Position(2, 3), new Position(2, 6)), "a"),
@@ -94,6 +95,28 @@ public class UtilsTest extends NbTestCase {
         LifecycleManager.getDefault().saveAll();
     }
 
+    public void testSamePosition() throws Exception {
+        //what happens when there are two edits at the same location:
+        //apply them in a reverse original order - but not clear what's correct,
+        //this is pretty broken
+        clearWorkDir();
+        FileObject wd = FileUtil.toFileObject(getWorkDir());
+        FileObject sourceFile1 = wd.createData("Test1.txt");
+        try (OutputStream out = sourceFile1.getOutputStream()) {
+            out.write(("0123456789\n" +
+                       "0123456789\n").getBytes(StandardCharsets.UTF_8));
+        }
+        Map<String, List<TextEdit>> changes = new HashMap<>();
+        changes.put(Utils.toURI(sourceFile1), Arrays.asList(new TextEdit(new Range(new Position(1, 3), new Position(1, 3)), "a"),
+                                                            new TextEdit(new Range(new Position(1, 3), new Position(1, 3)), "b")));
+        WorkspaceEdit edit = new WorkspaceEdit(changes);
+        Utils.applyWorkspaceEdit(edit);
+        assertContent("0123456789\n" +
+                      "012ab3456789\n",
+                      sourceFile1);
+        LifecycleManager.getDefault().saveAll();
+    }
+
     public void testApplyChanges() throws Exception {
         clearWorkDir();
         FileObject wd = FileUtil.toFileObject(getWorkDir());
@@ -103,7 +126,7 @@ public class UtilsTest extends NbTestCase {
                        "0123456789\n" +
                        "0123456789\n" +
                        "0123456789\n" +
-                       "0123456789\n").getBytes("UTF-8"));
+                       "0123456789\n").getBytes(StandardCharsets.UTF_8));
         }
         FileObject sourceFile2 = wd.createData("Test2.txt");
         try (OutputStream out = sourceFile2.getOutputStream()) {
@@ -111,7 +134,7 @@ public class UtilsTest extends NbTestCase {
                        "0123456789\n" +
                        "0123456789\n" +
                        "0123456789\n" +
-                       "0123456789\n").getBytes("UTF-8"));
+                       "0123456789\n").getBytes(StandardCharsets.UTF_8));
         }
         FileObject sourceFile3 = wd.createData("Test3.txt");
         WorkspaceEdit edit = new WorkspaceEdit(Arrays.asList(Either.forLeft(new TextDocumentEdit(new VersionedTextDocumentIdentifier(Utils.toURI(sourceFile1), -1), Arrays.asList(new TextEdit(new Range(new Position(2, 3), new Position(2, 6)), "a"),

@@ -14,4 +14,5 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-566891D3FE72F69C9038A921BBE6CE255A77D4A1 gradle-tooling-api-6.7.jar
+
+8BD6B76DFBED1CB7C139D53ED83DA334C99BACAD https://repo.gradle.org/artifactory/libs-releases/org/gradle/gradle-tooling-api/9.8.0/gradle-tooling-api-9.8.0.jar gradle-tooling-api-9.8.0.jar

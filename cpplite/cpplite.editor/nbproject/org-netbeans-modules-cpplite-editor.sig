@@ -1,10 +1,11 @@
 #Signature file v4.1
-#Version 1.0
+#Version 1.24
 
 CLSS public java.lang.Object
 cons public init()
 meth protected java.lang.Object clone() throws java.lang.CloneNotSupportedException
 meth protected void finalize() throws java.lang.Throwable
+ anno 0 java.lang.Deprecated(boolean forRemoval=false, java.lang.String since="9")
 meth public boolean equals(java.lang.Object)
 meth public final java.lang.Class<?> getClass()
 meth public final void notify()
@@ -24,7 +25,9 @@ meth public abstract void removeChangeListener(javax.swing.event.ChangeListener)
 CLSS public static org.netbeans.modules.cpplite.editor.spi.CProjectConfigurationProvider$ProjectConfiguration
  outer org.netbeans.modules.cpplite.editor.spi.CProjectConfigurationProvider
 cons public init(java.lang.String)
+cons public init(java.lang.String,boolean)
 cons public init(java.util.List<java.lang.String>)
+fld public final java.lang.String commandJsonContent
 fld public final java.lang.String commandJsonPath
 fld public final java.util.List<java.lang.String> commandJsonCommand
 supr java.lang.Object

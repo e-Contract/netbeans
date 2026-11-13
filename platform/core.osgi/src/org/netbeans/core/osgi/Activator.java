@@ -28,6 +28,7 @@ import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
@@ -79,7 +80,6 @@ public class Activator implements BundleActivator, SynchronousBundleListener {
         if (storage != null) {
             System.setProperty("netbeans.user", storage);
         }
-        System.setProperty("TopSecurityManager.disable", "true");
         NbBundle.setBranding(System.getProperty("branding.token"));
         OSGiMainLookup.initialize(context);
         queue = new DependencyQueue<String,Bundle>();
@@ -231,7 +231,7 @@ public class Activator implements BundleActivator, SynchronousBundleListener {
             // XXX set ${jdk.home}?
             List<String> bisp = new ArrayList<String>(Arrays.asList(Introspector.getBeanInfoSearchPath()));
             bisp.add("org.netbeans.beaninfo"); // NOI18N
-            Introspector.setBeanInfoSearchPath(bisp.toArray(new String[bisp.size()]));
+            Introspector.setBeanInfoSearchPath(bisp.toArray(new String[0]));
             CoreBridge.getDefault().registerPropertyEditors();
         }
         for (RunLevel rl : Lookup.getDefault().lookupAll(RunLevel.class)) {
@@ -304,7 +304,7 @@ public class Activator implements BundleActivator, SynchronousBundleListener {
                     try {
                         InputStream is = entry.openStream();
                         try {
-                            BufferedReader r = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+                            BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
                             String line;
                             while ((line = r.readLine()) != null) {
                                 if (!line.isEmpty() && !line.startsWith("#")) {
@@ -314,7 +314,7 @@ public class Activator implements BundleActivator, SynchronousBundleListener {
                                     class Svc extends AbstractURLStreamHandlerService {
                                         public @Override URLConnection openConnection(final URL u) throws IOException {
                                             try {
-                                                URLStreamHandler handler = (URLStreamHandler) bundle.loadClass(fqn).newInstance();
+                                                URLStreamHandler handler = (URLStreamHandler) bundle.loadClass(fqn).getDeclaredConstructor().newInstance();
                                                 Method openConnection = URLStreamHandler.class.getDeclaredMethod("openConnection", URL.class);
                                                 openConnection.setAccessible(true);
                                                 return (URLConnection) openConnection.invoke(handler, u);

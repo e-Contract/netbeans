@@ -43,23 +43,30 @@ public class FormatToken {
         WHITESPACE_AFTER_NAMESPACE,
         WHITESPACE_BEFORE_USE,
         WHITESPACE_BETWEEN_USE,
+        WHITESPACE_BETWEEN_USE_TYPES,
         WHITESPACE_AFTER_USE,
         WHITESPACE_BEFORE_CLASS_LEFT_BRACE,
         WHITESPACE_BEFORE_ANONYMOUS_CLASS_LEFT_BRACE,
+        WHITESPACE_AROUND_SCOPE_RESOLUTION_OP, // ::
         WHITESPACE_AROUND_OBJECT_OP,
         WHITESPACE_AROUND_NULLSAFE_OBJECT_OP,
         WHITESPACE_AROUND_DECLARE_EQUAL,
         WHITESPACE_AROUND_UNION_TYPE_SEPARATOR,
+        WHITESPACE_AROUND_INTERSECTION_TYPE_SEPARATOR,
         WHITESPACE_AROUND_CONCAT_OP,
         WHITESPACE_AROUND_UNARY_OP,
+        WHITESPACE_AROUND_TEXTUAL_OP, // AND, OR, XOR
         WHITESPACE_BEFORE_BINARY_OP,
         WHITESPACE_AFTER_BINARY_OP,
         WHITESPACE_AROUND_TERNARY_OP,
+        WHITESPACE_AROUND_COALESCING_OP,
         WHITESPACE_WITHIN_SHORT_TERNARY_OP,
         WHITESPACE_BEFORE_ASSIGN_OP,
         WHITESPACE_AFTER_ASSIGN_OP,
         WHITESPACE_AROUND_KEY_VALUE_OP,
         WHITESPACE_BEFORE_ANONYMOUS_CLASS_PAREN,
+        WHITESPACE_BEFORE_ANONYMOUS_FUNCTION_PAREN,
+        WHITESPACE_BEFORE_ATTRIBUTE_DEC_PAREN,
         WHITESPACE_BEFORE_METHOD_DEC_PAREN,
         WHITESPACE_BEFORE_METHOD_CALL_PAREN,
         WHITESPACE_BEFORE_IF_PAREN,
@@ -72,6 +79,9 @@ public class FormatToken {
         WHITESPACE_AFTER_CLASS_LEFT_BRACE,
         WHITESPACE_AFTER_ANONYMOUS_CLASS_LEFT_BRACE,
         WHITESPACE_AFTER_KEYWORD,
+        WHITESPACE_AFTER_FIELD_LEFT_BRACE,
+        WHITESPACE_BEFORE_FIELD_LEFT_BRACE,
+        WHITESPACE_BEFORE_PROPERTY_HOOK_LEFT_BRACE,
         WHITESPACE_BEFORE_FUNCTION_LEFT_BRACE,
         WHITESPACE_BEFORE_IF_LEFT_BRACE,
         WHITESPACE_BEFORE_ELSE_LEFT_BRACE,
@@ -87,6 +97,8 @@ public class FormatToken {
         WHITESPACE_AFTER_OTHER_LEFT_BRACE,
         WHITESPACE_BEFORE_CLASS_RIGHT_BRACE,
         WHITESPACE_BEFORE_ANONYMOUS_CLASS_RIGHT_BRACE,
+        WHITESPACE_BEFORE_FIELD_RIGHT_BRACE,
+        WHITESPACE_BEFORE_PROPERTY_HOOK_RIGHT_BRACE,
         WHITESPACE_BEFORE_FUNCTION_RIGHT_BRACE,
         WHITESPACE_BEFORE_IF_RIGHT_BRACE,
         WHITESPACE_BEFORE_FOR_RIGHT_BRACE,
@@ -97,6 +109,7 @@ public class FormatToken {
         WHITESPACE_BEFORE_OTHER_RIGHT_BRACE,
         WHITESPACE_BEFORE_USES_PART,
         WHITESPACE_BEFORE_USE_TRAIT,
+        WHITESPACE_AFTER_USE_TRAIT,
         WHITESPACE_BEFORE_USE_TRAIT_PART,
         WHITESPACE_BEFORE_USE_TRAIT_BODY_LEFT_BRACE,
         WHITESPACE_BEFORE_USE_TRAIT_BODY_RIGHT_BRACE,
@@ -115,7 +128,12 @@ public class FormatToken {
         WHITESPACE_WITHIN_CATCH_PARENS,
         WHITESPACE_WITHIN_MATCH_PARENS,
         WHITESPACE_WITHIN_ARRAY_BRACKETS_PARENS,
+        WHITESPACE_WITHIN_ATTRIBUTE_BRACKETS,
+        WHITESPACE_WITHIN_ATTRIBUTE_DECL_PARENS,
         WHITESPACE_WITHIN_TYPE_CAST_PARENS,
+        WHITESPACE_WITHIN_DNF_TYPE_PARENS, // (A&B)|C
+        WHITESPACE_WITHIN_OTHER_PARENS, // e.g. new (trim(' Example '))()
+        WHITESPACE_WITHIN_DYNAMIC_NAME_BRACES, // {$example}
         WHITESPACE_BEFORE_COMMA,
         WHITESPACE_AFTER_COMMA,
         WHITESPACE_BEFORE_SEMI,
@@ -129,8 +147,13 @@ public class FormatToken {
         WHITESPACE_BEFORE_FIELDS,
         WHITESPACE_BETWEEN_FIELDS,
         WHITESPACE_AFTER_FIELDS,
+        WHITESPACE_BEFORE_PROPERTY_HOOKS,
+        WHITESPACE_BETWEEN_PROPERTY_HOOKS,
+        WHITESPACE_AFTER_PROPERTY_HOOKS,
         WHITESPACE_BETWEEN_LINE_COMMENTS,
         WHITESPACE_BETWEEN_OPEN_CLOSE_BRACES,
+        WHITESPACE_BETWEEN_FUNCTION_OPEN_CLOSE_BRACES,
+        WHITESPACE_BETWEEN_PROPERTY_HOOK_OPEN_CLOSE_BRACES,
         WHITESPACE_IN_ARGUMENT_LIST,
         WHITESPACE_IN_ARRAY_ELEMENT_LIST,
         WHITESPACE_IN_INTERFACE_LIST,
@@ -148,6 +171,7 @@ public class FormatToken {
         WHITESPACE_BEFORE_IF_ELSE_STATEMENT,
         WHITESPACE_IN_FOR,
         WHITESPACE_IN_TERNARY_OP,
+        WHITESPACE_IN_COALESCING_OP,
         WHITESPACE_BEFORE_WHILE,
         WHITESPACE_BEFORE_ELSE,
         WHITESPACE_BEFORE_CATCH,
@@ -155,16 +179,26 @@ public class FormatToken {
         WHITESPACE_AFTER_MODIFIERS,
         WHITESPACE_BEFORE_RETURN_TYPE_SEPARATOR,
         WHITESPACE_AFTER_RETURN_TYPE_SEPARATOR,
+        WHITESPACE_BEFORE_NAMED_ARGUMENT_SEPARATOR,
+        WHITESPACE_AFTER_NAMED_ARGUMENT_SEPARATOR,
+        WHITESPACE_BEFORE_ENUM_BACKING_TYPE_SEPARATOR,
+        WHITESPACE_AFTER_ENUM_BACKING_TYPE_SEPARATOR,
         WHITESPACE_AFTER_NULLABLE_TYPE_PREFIX,
         WHITESPACE_BEFORE_MULTI_CATCH_SEPARATOR,
         WHITESPACE_AFTER_MULTI_CATCH_SEPARATOR,
+        WHITESPACE_AFTER_TYPE,
+        WHITESPACE_AFTER_ATTRIBUTE,
         LINE_COMMENT,
         COMMENT,
         COMMENT_START,
         COMMENT_END,
         DOC_COMMENT,
         DOC_COMMENT_START,
-        DOC_COMMENT_END;
+        DOC_COMMENT_END,
+        HAS_NEWLINE_WITHIN_METHOD_PARAMS,
+        HAS_NEWLINE_WITHIN_METHOD_CALL_ARGS,
+        HAS_NEWLINE_WITHIN_FOR,
+        ATTRIBUTE_START;
     }
     private int offset;
     private Kind id;
@@ -215,6 +249,7 @@ public class FormatToken {
                 && kind != Kind.DOC_COMMENT
                 && kind != Kind.DOC_COMMENT_START
                 && kind != Kind.DOC_COMMENT_END
+                && kind != Kind.ATTRIBUTE_START
                 && kind != Kind.OPEN_TAG
                 && kind != Kind.CLOSE_TAG
                 && kind != Kind.INIT_TAG
@@ -225,8 +260,8 @@ public class FormatToken {
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append(id.name());
-        if (this instanceof IndentToken) {
-            sb.append("(").append(((IndentToken) this).getDelta()).append(")"); // NOI18N
+        if (this instanceof IndentToken indentToken) {
+            sb.append("(").append(indentToken.getDelta()).append(")"); // NOI18N
         }
         sb.append(" offset: ").append(offset); // NOI18N
         if (oldText != null) {
@@ -273,6 +308,12 @@ public class FormatToken {
      */
     public static class AssignmentAnchorToken extends FormatToken {
 
+        public enum Type {
+            ASSIGNMENT, // "="
+            ARRAY, // "=>"
+            MATCH_ARM, // "=>"
+        }
+
         /**
          * length of the identifier that is before the aligned operator
          */
@@ -291,22 +332,28 @@ public class FormatToken {
          */
         private AssignmentAnchorToken previous;
         private final boolean multilined;
+        private final Type type;
 
         public AssignmentAnchorToken(int offset, boolean multilined) {
+            this(offset, multilined, Type.ASSIGNMENT);
+        }
+
+        public AssignmentAnchorToken(int offset, boolean multilined, Type type) {
             super(Kind.ASSIGNMENT_ANCHOR, offset);
             length = -1;
             maxLength = -1;
             previous = null;
             isInGroup = false;
             this.multilined = multilined;
+            this.type = type;
         }
 
-        public int getLenght() {
+        public int getLength() {
             return length;
         }
 
-        public void setLenght(int lenght) {
-            this.length = lenght;
+        public void setLength(int length) {
+            this.length = length;
         }
 
         public int getMaxLength() {
@@ -337,6 +384,9 @@ public class FormatToken {
             return multilined;
         }
 
+        public Type getType() {
+            return type;
+        }
     }
 
     public static class UnbreakableSequenceToken extends FormatToken {

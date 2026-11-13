@@ -19,6 +19,8 @@
 package org.netbeans.modules.java.lsp.server.debugging;
 
 import java.io.IOError;
+import java.io.InputStream;
+import java.io.Writer;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
@@ -28,19 +30,26 @@ import java.nio.file.Paths;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import org.eclipse.lsp4j.debug.services.IDebugProtocolClient;
 
+import org.netbeans.modules.java.lsp.server.LspSession;
 import org.netbeans.modules.java.lsp.server.debugging.breakpoints.BreakpointsManager;
 import org.netbeans.modules.java.lsp.server.debugging.launch.NbDebugSession;
+import org.netbeans.modules.java.lsp.server.progress.LspInternalHandle;
+import org.netbeans.modules.progress.spi.InternalHandle;
+import org.openide.util.Pair;
 
 public final class DebugAdapterContext {
 
+    private final LspSession lspSession;
     private IDebugProtocolClient client;
     private NbDebugSession debugSession;
     private boolean clientLinesStartAt1 = true;
     private boolean clientColumnsStartAt1 = true;
     private final boolean debuggerLinesStartAt1 = true;
+    private final boolean debuggerColumnsStartAt1 = true;
     private boolean clientPathsAreUri = false;
     private final boolean debuggerPathsAreUri = true;
     private boolean supportsRunInTerminalRequest = false;
@@ -49,16 +58,24 @@ public final class DebugAdapterContext {
     private Charset debuggeeEncoding;
     private boolean isVmStopOnEntry = false;
     private boolean isDebugMode = true;
+    private InternalHandle processExecutorHandle;
+    private Supplier<Writer> inputSinkProvider;
 
     private final AtomicInteger lastSourceReferenceId = new AtomicInteger(0);
-    private final Map<Integer, String> sourceReferences = new ConcurrentHashMap<>();
+    private final Map<Integer, Pair<URI, String>> sourcesById = new ConcurrentHashMap<>();
+    private final Map<URI, Integer> sourceReferences = new ConcurrentHashMap<>();
 
     private final NBConfigurationSemaphore configurationSemaphore = new NBConfigurationSemaphore();
     private final NbSourceProvider sourceProvider = new NbSourceProvider(this);
     private final NbThreads threadsProvider = new NbThreads();
     private final BreakpointsManager breakpointManager = new BreakpointsManager(threadsProvider);
 
-    public DebugAdapterContext() {
+    DebugAdapterContext(LspSession lspSession) {
+        this.lspSession = lspSession;
+    }
+
+    public LspSession getLspSession() {
+        return lspSession;
     }
 
     public IDebugProtocolClient getClient() {
@@ -111,8 +128,49 @@ public final class DebugAdapterContext {
         }
     }
 
+    public int getClientColumn(int debuggerColum) {
+        if (clientColumnsStartAt1 == debuggerColumnsStartAt1) {
+            return debuggerColum;
+        }
+        if (clientColumnsStartAt1) {
+            return debuggerColum + 1;
+        } else {
+            return debuggerColum - 1;
+        }
+    }
+
+    public int getDebuggerColumn(int clientColumn) {
+        if (clientColumnsStartAt1 == debuggerColumnsStartAt1) {
+            return clientColumn;
+        }
+        if (debuggerColumnsStartAt1) {
+            return clientColumn + 1;
+        } else {
+            return clientColumn - 1;
+        }
+    }
+
     void setClientPathsAreUri(boolean clientPathsAreUri) {
         this.clientPathsAreUri = clientPathsAreUri;
+    }
+    
+    public boolean requestProcessTermination() {
+        InternalHandle ih;
+        synchronized (this) {
+            ih = processExecutorHandle;
+        }
+        if (ih != null) {
+            ((LspInternalHandle)ih).forceRequestCancel();
+            return true;
+        } else {
+            return false;
+        }
+    }
+    
+    public void setProcessExecutorHandle(InternalHandle h) {
+        synchronized (this) {
+            this.processExecutorHandle = h;
+        }
     }
 
     public String getClientPath(String debuggerPath) {
@@ -179,13 +237,27 @@ public final class DebugAdapterContext {
         this.sourcePaths = sourcePaths;
     }
 
-    public String getSourceUri(int sourceReference) {
-        return sourceReferences.get(sourceReference);
+    public URI getSourceUri(int sourceReference) {
+        Pair<URI, String> sourceInfo = sourcesById.get(sourceReference);
+        if (sourceInfo != null) {
+            return sourceInfo.first();
+        } else {
+            return null;
+        }
     }
 
-    public int createSourceReference(String uri) {
-        int id = lastSourceReferenceId.incrementAndGet();
-        sourceReferences.put(id, uri);
+    public String getSourceMimeType(int sourceReference) {
+        Pair<URI, String> sourceInfo = sourcesById.get(sourceReference);
+        if (sourceInfo != null) {
+            return sourceInfo.second();
+        } else {
+            return null;
+        }
+    }
+
+    public int createSourceReference(URI uri, String mimeType) {
+        int id = sourceReferences.computeIfAbsent(uri, u -> lastSourceReferenceId.incrementAndGet());
+        sourcesById.put(id, Pair.of(uri, mimeType));
         return id;
     }
 
@@ -229,5 +301,13 @@ public final class DebugAdapterContext {
 
     public BreakpointsManager getBreakpointManager() {
         return this.breakpointManager;
+    }
+
+    public Writer getInputSink() {
+        return inputSinkProvider == null ? null : inputSinkProvider.get();
+    }
+
+    public void setInputSinkProvider(Supplier<Writer> inputSinkProvider) {
+        this.inputSinkProvider = inputSinkProvider;
     }
 }

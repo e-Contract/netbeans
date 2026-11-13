@@ -33,7 +33,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import javax.swing.GroupLayout.Alignment;
-import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JScrollPane;
@@ -60,6 +59,7 @@ import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.nodes.Node;
 import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.windows.TopComponent;
@@ -167,9 +167,7 @@ final class CoverageReportTopComponent extends TopComponent {
         //        sorter.setComparator(i, comparableComparator);
         //    }
         totalCoverage.setCoveragePercentage(model.getTotalCoverage());
-        FileCoverageSummary summary = model.getCoverageSummary();
-        totalCoverage.setStats(summary.getLineCount(), summary.getExecutedLineCount(),
-            summary.getPartialCount(), summary.getInferredCount());
+        updateStats();
     }
 
     public void resizeColumnWidth(JTable table) {
@@ -363,10 +361,16 @@ final class CoverageReportTopComponent extends TopComponent {
         model = new CoverageTableModel(results);
         table.setModel(model);
         totalCoverage.setCoveragePercentage(model.getTotalCoverage());
-        FileCoverageSummary summary = model.getCoverageSummary();
-        totalCoverage.setStats(summary.getLineCount(), summary.getExecutedLineCount(),
-            summary.getPartialCount(), summary.getInferredCount());
+        updateStats();
         resizeColumnWidth(table);
+    }
+
+    private void updateStats() {
+        FileCoverageSummary summary = model.getCoverageSummary();
+        if (summary != null) {
+            totalCoverage.setStats(summary.getLineCount(), summary.getExecutedLineCount(),
+                    summary.getPartialCount(), summary.getInferredCount());
+        }    
     }
 
     private static class CoverageTableModel implements TableModel {
@@ -544,7 +548,7 @@ final class CoverageReportTopComponent extends TopComponent {
                     DataObject dobj = DataObject.find(file);
                     Node node = dobj.getNodeDelegate();
                     Image icon = node.getIcon(BeanInfo.ICON_COLOR_32x32);
-                    setIcon(new ImageIcon(icon));
+                    setIcon(ImageUtilities.image2Icon(icon));
                 } catch (DataObjectNotFoundException ex) {
                     Exceptions.printStackTrace(ex);
                 }

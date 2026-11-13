@@ -32,13 +32,18 @@ import javax.swing.JComponent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.progress.ProgressHandle;
 import org.netbeans.modules.gradle.api.GradleProjects;
+import org.netbeans.modules.gradle.newproject.GradleProjectFromTemplateHandler;
 import org.netbeans.spi.project.ui.support.CommonProjectActions;
 import org.openide.WizardDescriptor;
+import org.openide.util.NbBundle;
 
 /**
  *
  * @author Laszlo Kishalmi
  */
+@NbBundle.Messages({
+    "TITLE_CreatingNewProject=Creating new project"
+})
 public abstract class BaseGradleWizardIterator implements WizardDescriptor.ProgressInstantiatingIterator<WizardDescriptor> {
 
     ArrayList<? extends WizardDescriptor.Panel<WizardDescriptor>> panels;
@@ -78,7 +83,8 @@ public abstract class BaseGradleWizardIterator implements WizardDescriptor.Progr
         index = 0;
         wizard.putProperty ("NewProjectWizard_Title", getTitle()); // NOI18N
 
-        data = wizard;
+        data = initData(wizard);
+
         panels = new ArrayList<>(createPanels());
         String[] steps = new String[panels.size()];
         for (int i = 0; i < panels.size(); i++) {
@@ -94,9 +100,23 @@ public abstract class BaseGradleWizardIterator implements WizardDescriptor.Progr
         }
     }
 
+    protected WizardDescriptor initData(WizardDescriptor data) {
+        return data;
+    }
+
     protected abstract List<? extends WizardDescriptor.Panel<WizardDescriptor>> createPanels();
     protected abstract String getTitle();
     protected abstract void collectOperations(final TemplateOperation ops, final Map<String, Object> params);
+
+    static {
+        // register collectOperations for a callback from a friend package
+        GradleProjectFromTemplateHandler.register((baseIterator, params) -> {
+            ProgressHandle handle = ProgressHandle.createHandle(Bundle.TITLE_CreatingNewProject());
+            TemplateOperation ops = new TemplateOperation(handle);
+            baseIterator.collectOperations(ops, params);
+            return ops;
+        });
+    }
 
     protected final WizardDescriptor getData() {
         return data;
@@ -110,7 +130,7 @@ public abstract class BaseGradleWizardIterator implements WizardDescriptor.Progr
     protected final File assumedRoot() {
         File ret = null;
 
-        File loc = (File) data.getProperty(CommonProjectActions.PROJECT_PARENT_FOLDER);
+        File loc = data == null ? null : (File) data.getProperty(CommonProjectActions.PROJECT_PARENT_FOLDER);
         if (loc != null) {
             //TODO: Better evaluate possible roots.
             ret = GradleProjects.testForRootProject(loc) ? loc : null;

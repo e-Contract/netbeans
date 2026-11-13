@@ -30,6 +30,7 @@ import java.awt.font.GlyphVector;
 import java.awt.geom.Point2D;
 import java.io.IOException;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import javax.accessibility.Accessible;
 import javax.accessibility.AccessibleContext;
@@ -37,6 +38,7 @@ import javax.accessibility.AccessibleRole;
 import javax.swing.JComponent.AccessibleJComponent;
 import javax.swing.*;
 import javax.swing.text.Keymap;
+import javax.swing.text.StyleContext;
 
 /**
  * Term is a pure Java multi-purpose terminal emulator.
@@ -228,6 +230,7 @@ public class Term extends JComponent implements Accessible {
     }
 
     private State st = new State();
+    @SuppressWarnings("this-escape")
     private Sel sel = new Sel(this, st);
     private transient Ops ops = new OpsImpl();
     private int top_margin = 0;		// 0 means default (see topMargin())
@@ -264,7 +267,9 @@ public class Term extends JComponent implements Accessible {
     // will be quite far from the initial press location.
     private Point left_down_point;
     // getSystemSelection() wasn't available on Java prior to 1.4
+    @SuppressWarnings("this-escape")
     private Clipboard systemClipboard = getToolkit().getSystemClipboard();
+    @SuppressWarnings("this-escape")
     private Clipboard systemSelection = getToolkit().getSystemSelection();
     private static final Color TRANSPARENT = new Color(0, 0, 0, 0);
 
@@ -471,6 +476,7 @@ public class Term extends JComponent implements Accessible {
     /*
      * Debugging utilities
      */
+    private static final int DEFAULT_DEBUG = Integer.getInteger("org.netbeans.lib.terminalemulator.Term.debug", 0);
     @SuppressWarnings("PointlessBitwiseExpression")
     public static final int DEBUG_OPS = 1 << 0;
     public static final int DEBUG_KEYS = 1 << 1;
@@ -484,7 +490,8 @@ public class Term extends JComponent implements Accessible {
     public void setDebugFlags(int flags) {
         debug = flags;
     }
-    private int debug = /* DEBUG_OPS|DEBUG_KEYS|DEBUG_INPUT|DEBUG_OUTPUT | */ 0;
+
+    private int debug = DEFAULT_DEBUG;
 
     private boolean debugOps() {
         return (debug & DEBUG_OPS) == DEBUG_OPS;
@@ -503,10 +510,7 @@ public class Term extends JComponent implements Accessible {
     }
 
     private boolean debugMargins() {
-        return true;
-    /* TMP
-    return (debug & DEBUG_MARGINS) == DEBUG_MARGINS;
-     */
+        return (debug & DEBUG_MARGINS) == DEBUG_MARGINS;
     }
 
     /**
@@ -748,7 +752,7 @@ public class Term extends JComponent implements Accessible {
         st.firsty = 0;
         st.cursor.row = 0;
         st.cursor.col = 0;
-        setAttribute(0);
+        setAttribute(List.of(0));
         st.saveCursor();	// This clobbers the saved cursor value
         st.restoreCursor();	// release reference to saved cursor object
 
@@ -788,15 +792,12 @@ public class Term extends JComponent implements Accessible {
 
         final StringBuffer aBuf = new StringBuffer();
 
-        visitLines(begin, end, false, new LineVisitor() {
-
-	    @Override
-            public boolean visit(Line l, int row, int bcol, int ecol) {
-                // buf.append(l.charArray(), bcol, ecol-bcol+1);
-                l.accumulateInto(bcol, ecol, aBuf);
-                return true;
-            }
-        });
+        visitLines(begin, end, false,
+                (Line l, int row, int bcol, int ecol) -> {
+                    // buf.append(l.charArray(), bcol, ecol-bcol+1);
+                    l.accumulateInto(bcol, ecol, aBuf);
+                    return true;
+                });
         return aBuf.toString();
     }
 
@@ -830,7 +831,7 @@ public class Term extends JComponent implements Accessible {
      * Be careful with control characters you need to create the keystroke
      * as follows (note the - 64):
      * <pre>
-     * KeyStroke.getKeyStroke(new Character((char)('T'-64)), Event.CTRL_MASK)
+     * KeyStroke.getKeyStroke(Character.valueOf((char)('T'-64)), Event.CTRL_MASK)
      * </pre>
      * @return Property value.
      */
@@ -1303,14 +1304,24 @@ public class Term extends JComponent implements Accessible {
      * @param value attribute value
      */
     public void setAttribute(int value) {
-        st.attr = Attr.setAttribute(st.attr, value);
+        setAttribute(List.of(value));
+    }
+
+    /**
+     * Set the display attribute for characters printed from now on.
+     * <p>
+     * Unrecognized values silently ignored.
+     * @param value attribute value
+     */
+    public void setAttribute(List<Integer> value) {
+        st.attr = st.attr.setAttribute(value);
     }
 
     /**
      * Return the complete state of attributes.
      * @return Complete state of attributes.
      */
-    int attrSave() {
+    Attr attrSave() {
         return st.attr;
     }
 
@@ -1318,7 +1329,7 @@ public class Term extends JComponent implements Accessible {
      * Restore the complete set of attributes.
      * @param attr Attributes to be restored.
      */
-    void attrRestore(int attr) {
+    void attrRestore(Attr attr) {
         st.attr = attr;
     }
 
@@ -1335,14 +1346,11 @@ public class Term extends JComponent implements Accessible {
     public void setCharacterAttribute(Coord begin, Coord end,
             final int value, final boolean on) {
 
-        visitLines(begin, end, false, new LineVisitor() {
-
-	    @Override
-            public boolean visit(Line l, int brow, int bcol, int ecol) {
-                l.setCharacterAttribute(bcol, ecol, value, on);
-                return true;
-            }
-        });
+        visitLines(begin, end, false,
+                (Line l, int brow, int bcol, int ecol) -> {
+                    l.setCharacterAttribute(bcol, ecol, value, on);
+                    return true;
+                });
 
         repaint(false);
     }
@@ -1514,10 +1522,10 @@ public class Term extends JComponent implements Accessible {
      */
     private class Scroller extends Thread {
 
-        public final static int UP = 1 << 1;
-        public final static int DOWN = 1 << 2;
-        public final static int LEFT = 1 << 3;
-        public final static int RIGHT = 1 << 4;
+        public static final int UP = 1 << 1;
+        public static final int DOWN = 1 << 2;
+        public static final int LEFT = 1 << 3;
+        public static final int RIGHT = 1 << 4;
         private int direction;
 
         public Scroller(int direction) {
@@ -1537,8 +1545,6 @@ public class Term extends JComponent implements Accessible {
                     return false;
                 }
 
-                BCoord x = sel.sel_extent.toBCoord(firsta);
-                BCoord v = toViewCoord(x);
                 int r;
                 int c;
 
@@ -1674,7 +1680,7 @@ public class Term extends JComponent implements Accessible {
         palette[Attr.PAL_ANSI+6] = new Color(0x00CDCD);
         palette[Attr.PAL_ANSI+7] = new Color(0xE5E5E5);
 
-        palette[Attr.PAL_BRIGHT+0] = new Color(0x0D0D0D);
+        palette[Attr.PAL_BRIGHT+0] = new Color(0x5d5050);
         palette[Attr.PAL_BRIGHT+1] = new Color(0xFF0000);
         palette[Attr.PAL_BRIGHT+2] = new Color(0x00FF00);
         palette[Attr.PAL_BRIGHT+3] = new Color(0xFFFF00);
@@ -1685,13 +1691,16 @@ public class Term extends JComponent implements Accessible {
 
 	// Fill RGB cube
 	for (int r = 0; r <= 5; r++) {
-	    for (int g = 0; g <= 5; g++) {
-		for (int b = 0; b <= 5; b++) {
-		    int number = 36 * r + 6 * g + b;
-		    palette[Attr.PAL_RGB+number] = new Color(r*51, b*51, b*51);
-		}
-	    }
-	}
+            for (int g = 0; g <= 5; g++) {
+                for (int b = 0; b <= 5; b++) {
+                    int number = 36 * r + 6 * g + b;
+                    int rval = r == 0 ? 0 : (r * 40 + 55);
+                    int gval = g == 0 ? 0 : (g * 40 + 55);
+                    int bval = b == 0 ? 0 : (b * 40 + 55);
+                    palette[Attr.PAL_RGB + number] = new Color(rval, gval, bval);
+                }
+            }
+        }
 
 	// Fill greyscale portion.
 	for (int g = 0; g < 24; g++) {
@@ -1715,6 +1724,7 @@ public class Term extends JComponent implements Accessible {
     /**
      * Constructor
      */
+    @SuppressWarnings("this-escape")
     public Term() {
         st.rows = 25;
         st.firstx = 0;
@@ -1728,9 +1738,9 @@ public class Term extends JComponent implements Accessible {
         }
 
         if (f != null) {
-            setFont(new Font(Font.MONOSPACED, Font.PLAIN, f.getSize() + 1)); // NOI18N
+            setFont(new Font("Monospaced", Font.PLAIN, f.getSize() + 1)); // NOI18N
         } else {
-            setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)); // NOI18N
+            setFont(new Font("Monospaced", Font.PLAIN, 12)); // NOI18N
         }
 
         BorderLayout layout = new BorderLayout();
@@ -1755,39 +1765,34 @@ public class Term extends JComponent implements Accessible {
         vscroll_bar.setEnabled(true);
         vscroll_bar.setFocusable(false);
 
-        vscroll_bar.addAdjustmentListener(new AdjustmentListener() {
+        vscroll_bar.addAdjustmentListener((AdjustmentEvent e) -> {
+            // JScrollBar sb = (JScrollBar) e.getAdjustable();
+            switch (e.getAdjustmentType()) {
+                case AdjustmentEvent.TRACK -> {
 
-	    @Override
-            public void adjustmentValueChanged(AdjustmentEvent e) {
-                // JScrollBar sb = (JScrollBar) e.getAdjustable();
-                switch (e.getAdjustmentType()) {
-                    case AdjustmentEvent.TRACK:
+                    int pos = e.getValue();
 
-                        int pos = e.getValue();
-
-                        // adjustmentValueChanged() will get called when we
-                        // call setValues() on the scrollbar.
-                        // This test sort-of filters that out
-                        if (pos == st.firstx) {
-                            break;
-                        }
-
-                        // deal with the user moving the thumb
-                        st.firstx = pos;
-                        /* DEBUG
-                        if (st.firstx + st.rows > buf.nlines) {
-                        Thread.dumpStack();
-                        printStats("bad scroll value");	// NOI18N
-                        }
-                         */
-                        repaint(false);
+                    // adjustmentValueChanged() will get called when we
+                    // call setValues() on the scrollbar.
+                    // This test sort-of filters that out
+                    if (pos == st.firstx) {
                         break;
+                    }
 
-                    default:
-                        /* DEBUG
-                        System.out.println("adjustmentValueChanged: " + e); // NOI18N
-                         */
-                        break;
+                    // deal with the user moving the thumb
+                    st.firstx = pos;
+                    /* DEBUG
+                    if (st.firstx + st.rows > buf.nlines) {
+                    Thread.dumpStack();
+                    printStats("bad scroll value");	// NOI18N
+                    }
+                    */
+                    repaint(false);
+                }
+                default -> {
+                    /* DEBUG
+                    System.out.println("adjustmentValueChanged: " + e); // NOI18N
+                    */
                 }
             }
         });
@@ -1802,33 +1807,28 @@ public class Term extends JComponent implements Accessible {
         hscroll_wrapper = new ScrollWrapper(hscroll_bar);
         add(BorderLayout.SOUTH, hscroll_wrapper);
 
-        hscroll_bar.addAdjustmentListener(new AdjustmentListener() {
+        hscroll_bar.addAdjustmentListener((AdjustmentEvent e) -> {
+            // JScrollBar sb = (JScrollBar) e.getAdjustable();
+            switch (e.getAdjustmentType()) {
+                case AdjustmentEvent.TRACK -> {
 
-	    @Override
-            public void adjustmentValueChanged(AdjustmentEvent e) {
-                // JScrollBar sb = (JScrollBar) e.getAdjustable();
-                switch (e.getAdjustmentType()) {
-                    case AdjustmentEvent.TRACK:
+                    int pos = e.getValue();
 
-                        int pos = e.getValue();
-
-                        // adjustmentValueChanged() will get called when we
-                        // call setValues() on the scrollbar.
-                        // This test sort-of filters that out
-                        if (pos == st.firsty) {
-                            break;
-                        }
-
-                        // deal with the user moving the thumb
-                        st.firsty = pos;
-                        repaint(false);
+                    // adjustmentValueChanged() will get called when we
+                    // call setValues() on the scrollbar.
+                    // This test sort-of filters that out
+                    if (pos == st.firsty) {
                         break;
+                    }
 
-                    default:
-                        /* DEBUG
-                        System.out.println("adjustmentValueChanged: " + e); // NOI18N
-                         */
-                        break;
+                    // deal with the user moving the thumb
+                    st.firsty = pos;
+                    repaint(false);
+                }
+                default -> {
+                    /* DEBUG
+                    System.out.println("adjustmentValueChanged: " + e); // NOI18N
+                    */
                 }
             }
         });
@@ -1874,13 +1874,13 @@ public class Term extends JComponent implements Accessible {
 
                 // Consume ctrl+tab, ctrl+shift+tab event, see #237990
                 if (keymap != null && (c == KeyEvent.VK_TAB)
-                        && ((e.getModifiers() == KeyEvent.CTRL_MASK)
-                        || (e.getModifiers() == (KeyEvent.CTRL_MASK | KeyEvent.SHIFT_MASK)))) {
+                        && ((e.getModifiersEx() == KeyEvent.CTRL_DOWN_MASK)
+                        || (e.getModifiersEx() == (KeyEvent.CTRL_DOWN_MASK | KeyEvent.SHIFT_DOWN_MASK)))) {
                     e.consume();
                 }
 
                 if (passOn && maybeConsume(e)) {
-		    if ((e.getModifiers() & KeyEvent.ALT_MASK) == KeyEvent.ALT_MASK) {
+		    if ((e.getModifiersEx() & KeyEvent.ALT_DOWN_MASK) == KeyEvent.ALT_DOWN_MASK) {
 			if (getAltSendsEscape()) {
 			    on_char(ESC);
 			    on_char(c);
@@ -1937,51 +1937,45 @@ public class Term extends JComponent implements Accessible {
                 }
 
                 switch (e.getKeyCode()) {
-                    case KeyEvent.VK_ESCAPE:
+                    case KeyEvent.VK_ESCAPE -> {
                         if (onMac()) {
                             // On a Mac AWT doesn't provide us with a keyTyped()
                             // for VK_ESCAPE so we simulate it.
                             charTyped(ESC, e);
                         }
-                        break;
-                    case KeyEvent.VK_COPY:
-                        copyToClipboard();
-                        break;
-                    case KeyEvent.VK_PASTE:
-                        pasteFromClipboard();
-                        break;
-                    case KeyEvent.VK_ENTER:
-                        saw_return = true;
-                        break;
-                    case KeyEvent.VK_PAGE_UP:
-                        if (e.getModifiers() == Event.CTRL_MASK) {
+                    }
+                    case KeyEvent.VK_COPY -> copyToClipboard();
+                    case KeyEvent.VK_PASTE -> pasteFromClipboard();
+                    case KeyEvent.VK_ENTER -> saw_return = true;
+                    case KeyEvent.VK_PAGE_UP -> {
+                        if (e.getModifiersEx() == KeyEvent.CTRL_DOWN_MASK) {
                             pageLeft(1);
                         } else {
                             pageUp(1);
                         }
-                        break;
-                    case KeyEvent.VK_PAGE_DOWN:
-                        if (e.getModifiers() == Event.CTRL_MASK) {
+                    }
+                    case KeyEvent.VK_PAGE_DOWN -> {
+                        if (e.getModifiersEx() == KeyEvent.CTRL_DOWN_MASK) {
                             pageRight(1);
                         } else {
                             pageDown(1);
                         }
-                        break;
+                    }
 
-                    case KeyEvent.VK_UP:
-                        if (e.getModifiers() == Event.CTRL_MASK) {
+                    case KeyEvent.VK_UP -> {
+                        if (e.getModifiersEx() == KeyEvent.CTRL_DOWN_MASK) {
                             lineUp(1);
                         }
-                        break;
-                    case KeyEvent.VK_DOWN:
-                        if (e.getModifiers() == Event.CTRL_MASK) {
+                    }
+                    case KeyEvent.VK_DOWN -> {
+                        if (e.getModifiersEx() == KeyEvent.CTRL_DOWN_MASK) {
                             lineDown(1);
                         }
-                        break;
-                    case KeyEvent.VK_LEFT:
-                        break;
-                    case KeyEvent.VK_RIGHT:
-                        break;
+                    }
+                    case KeyEvent.VK_LEFT -> {
+                    }
+                    case KeyEvent.VK_RIGHT -> {
+                    }
                 }
                 passOn = maybeConsume(e);
             }
@@ -2115,27 +2109,19 @@ public class Term extends JComponent implements Accessible {
                     }
 
 		    switch (e.getClickCount()) {
-		    	case 1:
-			    left_down_point = (Point) e.getPoint().clone();
-			    break;
-		    	case 2:
-			    {
+		    	case 1 -> left_down_point = (Point) e.getPoint().clone();
+		    	case 2 -> 			    {
 				BCoord bcoord = toBufCoords(toViewCoord(e.getPoint()));
 				BExtent word = buf.find_word(word_delineator, bcoord);
 				sel.select_word(word.toExtent(firsta));
 				repaint(false);
-				break;
 			    }
-		    	case 3:
-			    {
+		    	case 3 -> 			    {
 				BCoord bcoord = toBufCoords(toViewCoord(e.getPoint()));
 				BExtent line = buf.find_line(bcoord);
 				sel.select_line(line.toExtent(firsta));
 				repaint(false);
-				break;
 			    }
-		    	default:
-			    break;
 		    }
 
                     fireSelectionExtentChanged();
@@ -2711,8 +2697,7 @@ public class Term extends JComponent implements Accessible {
     private int totcols;
 
     private void do_run(Graphics g, int yoff, int xoff, int baseline,
-            int brow, /* OLD char buf[], */ Line l,
-            int attr, int rbegin, int rend) {
+            Line l, Attr attr, int rbegin, int rend) {
 
         /* DEBUG
         System.out.println("do_run(" + rbegin + ", " + rend + ")");	// NOI18N
@@ -2748,8 +2733,8 @@ public class Term extends JComponent implements Accessible {
             xlength = rlength * metrics.width;
         }
 
-        boolean reverse = Attr.REVERSE.isSet(attr);
-        boolean active = Attr.ACTIVE.isSet(attr);
+        boolean reverse = attr.isReverse();
+        boolean active = attr.isActive();
 
         // choose background color
         Color bg;
@@ -2757,7 +2742,7 @@ public class Term extends JComponent implements Accessible {
         if (active) {
             bg = active_color;
 	} else {
-	    if (Attr.BGCOLOR.isSet(attr) || Attr.REVERSE.isSet(attr)) {
+	    if (attr.isBGcolor() || attr.isReverse()) {
 		bg = backgroundColor(reverse, attr);
 	    } else if (l.getBackgroundColor() != 0) {
 		bg = rendition_to_color(l.getBackgroundColor());
@@ -2778,7 +2763,7 @@ public class Term extends JComponent implements Accessible {
         g.setColor(fg);
 
         // draw any underscores
-        if (Attr.UNDERSCORE.isSet(attr)) {
+        if (attr.isUnderscore()) {
             int h = metrics.height - metrics.leading - 1;
             g.drawLine(x, yoff + h, x + xlength, yoff + h);
         }
@@ -2787,7 +2772,7 @@ public class Term extends JComponent implements Accessible {
         myDrawChars(g, /* OLD buf, */ l, rbegin, rlength, x, baseline);
 
         // Draw fake bold characters by redrawing one pixel to the right
-        if (Attr.BRIGHT.isSet(attr)) {
+        if (attr.isBright()) {
             myDrawChars(g, /* OLD buf, */ l, rbegin, rlength, x + 1, baseline);
         }
     }
@@ -2808,7 +2793,7 @@ public class Term extends JComponent implements Accessible {
         for (int gx = 0; gx < n; gx++) {
             newp.x = col;
             gv.setGlyphPosition(gx, newp);
-            col += l.stringWidth(metrics, start + gx);
+            col += l.width(metrics, start + gx) * metrics.width;
         }
     }
     /**
@@ -2875,24 +2860,20 @@ public class Term extends JComponent implements Accessible {
         if ((hints != null) && (g instanceof Graphics2D)) {
             ((Graphics2D) g).setRenderingHints(hints);
         }
-        if (metrics.isMultiCell()) {
-            // slow way
-            // This looks expensive but it is in fact a whole lot faster
-            // than issuing a g.drawChars() _per_ character
 
-            Graphics2D g2 = (Graphics2D) g;
-            FontRenderContext frc = g2.getFontRenderContext();
-            // Gaaah, why doesn't createGlyphVector() take a (char[],offset,len)
-            // triple?
-            char[] tmp = new char[howmany];
-            System.arraycopy(xferBuf, start, tmp, 0, howmany);
-            GlyphVector gv = getFont().createGlyphVector(frc, tmp);
-            massage_glyphs(gv, start, howmany, l);
-            g2.drawGlyphVector(gv, xoff, baseline);
-        } else {
-            // fast way
-            g.drawChars(xferBuf, start, howmany, xoff, baseline);
-        }
+        // This looks expensive but it is in fact a whole lot faster than
+        // issuing a g.drawChars() _per_ character. drawChars can not be used
+        // directly, as it was observed, that characters are not placed
+        // correctly (observed on HiDPI displays)
+        Graphics2D g2 = (Graphics2D) g;
+        FontRenderContext frc = g2.getFontRenderContext();
+        // Gaaah, why doesn't createGlyphVector() take a (char[],offset,len)
+        // triple?
+        char[] tmp = new char[howmany];
+        System.arraycopy(xferBuf, start, tmp, 0, howmany);
+        GlyphVector gv = getFont().createGlyphVector(frc, tmp);
+        massage_glyphs(gv, start, howmany, l);
+        g2.drawGlyphVector(gv, xoff, baseline);
     }
 
     /*
@@ -2987,7 +2968,7 @@ public class Term extends JComponent implements Accessible {
             return;
         }
 
-        int attrs[] = l.attrArray();
+        Attr[] attrs = l.attrArray();
 
         // find the extent of the selection on this line
         int sbegin = -1;
@@ -3024,10 +3005,10 @@ public class Term extends JComponent implements Accessible {
             // A run, as in run-length-encoding, is a set of characters with
             // the same attributes.
 
-            int attr = attrs[rbegin];
+            Attr attr = attrs[rbegin];
             rend = rbegin + 1;
             while (rend <= lastcol) {
-                if (attrs[rend] != attr) {
+                if (! attrs[rend].equals(attr)) {
                     break;
                 }
                 rend++;
@@ -3039,19 +3020,17 @@ public class Term extends JComponent implements Accessible {
             // parts that fall under the selection are rendered with an
             // alternative attribute set.
 
-            int alt_attr = attr & ~ Attr.ALT;
+            Attr alt_attr = attr.altVariant();
             if (sbegin == -1 || send < rbegin || sbegin > rend) {
                 // run is not in selection
-                do_run(g, yoff, xoff,
-                        baseline, brow, /* OLD buf, */ l, attr, rbegin, rend);
+                do_run(g, yoff, xoff, baseline, l, attr, rbegin, rend);
 
             } else if (sbegin <= rbegin && send >= rend) {
                 // run entirely in selection
                 /* DEBUG
                 System.out.println("run entirely in selection");	// NOI18N
                  */
-                do_run(g, yoff, xoff,
-                        baseline, brow, /* OLD buf, */ l, alt_attr, rbegin, rend);
+                do_run(g, yoff, xoff, baseline, l, alt_attr, rbegin, rend);
 
             } else if (sbegin > rbegin && send < rend) {
                 // selection fully within run
@@ -3059,12 +3038,9 @@ public class Term extends JComponent implements Accessible {
                 /* DEBUG
                 System.out.println("run selection fully within run");	// NOI18N
                  */
-                do_run(g, yoff, xoff,
-                        baseline, brow, /* OLD buf, */ l, attr, rbegin, sbegin - 1);
-                do_run(g, yoff, xoff,
-                        baseline, brow, /* OLD buf, */ l, alt_attr, sbegin, send);
-                do_run(g, yoff, xoff,
-                        baseline, brow, /* OLD buf, */ l, attr, send + 1, rend);
+                do_run(g, yoff, xoff, baseline, l, attr, rbegin, sbegin - 1);
+                do_run(g, yoff, xoff, baseline, l, alt_attr, sbegin, send);
+                do_run(g, yoff, xoff, baseline, l, attr, send + 1, rend);
 
             } else if (sbegin <= rbegin) {
                 // selection covers left portion of run
@@ -3072,10 +3048,8 @@ public class Term extends JComponent implements Accessible {
                 System.out.println("selection covers left portion of run");	// NOI18N
                  */
                 // split into two parts
-                do_run(g, yoff, xoff,
-                        baseline, brow, /* OLD buf, */ l, alt_attr, rbegin, send);
-                do_run(g, yoff, xoff,
-                        baseline, brow, /* OLD buf, */ l, attr, send + 1, rend);
+                do_run(g, yoff, xoff, baseline, l, alt_attr, rbegin, send);
+                do_run(g, yoff, xoff, baseline, l, attr, send + 1, rend);
 
             } else if (send >= rend) {
                 // selection covers right portion of run
@@ -3083,10 +3057,8 @@ public class Term extends JComponent implements Accessible {
                 /* DEBUG
                 System.out.println("selection covers right portion of run");	// NOI18N
                  */
-                do_run(g, yoff, xoff,
-                        baseline, brow, /* OLD buf, */ l, attr, rbegin, sbegin - 1);
-                do_run(g, yoff, xoff,
-                        baseline, brow, /* OLD buf, */ l, alt_attr, sbegin, rend);
+                do_run(g, yoff, xoff, baseline, l, attr, rbegin, sbegin - 1);
+                do_run(g, yoff, xoff, baseline, l, alt_attr, sbegin, rend);
 
             } else {
                 /* DEBUG
@@ -3243,7 +3215,34 @@ public class Term extends JComponent implements Accessible {
      */
     }
 
+    /**
+     * Debug helper to draw a coordinate grid over the terminal to visualise the
+     * cells of the terminal and where the characters are expected to appear
+     *
+     * @param g
+     */
     private void paint_margins(Graphics g) {
+        Graphics2D g2d = (Graphics2D) g.create();
+
+        g2d.setColor(Color.RED);
+        g2d.setStroke(new BasicStroke(1.0f));
+
+        int width = getWidth();
+        int height = getHeight();
+
+        int currX = 0;
+        while(currX <= width) {
+            g2d.drawLine(currX, 0, currX, height);
+            currX += metrics.width;
+        }
+
+        int currY = 0;
+        while(currY <= height) {
+            g2d.drawLine(0, currY, width, currY);
+            currY += metrics.height;
+        }
+
+        g2d.dispose();
     }
 
     private void paint_cursor(Graphics g) {
@@ -3271,7 +3270,7 @@ public class Term extends JComponent implements Accessible {
         }
 
         g.setXORMode(actual_background);
-        int rect_x = cursor_line().stringWidth(metrics, cursor_col) +
+        int rect_x = cursor_col * metrics.width +
                 glyph_gutter_width +
                 debug_gutter_width;
         int rect_y = cursor_row * metrics.height;
@@ -3445,7 +3444,7 @@ public class Term extends JComponent implements Accessible {
             }
 
             l.setCharAt(Term.this, c, insertion_col,
-                        st.attr, Attr.BGCOLOR.get(st.attr));	// overstrike
+                        st.attr, st.attr.bgColorVariant());	// overstrike
             st.cursor.col += cwidth;
 
             if (st.cursor.col >= buf.visibleCols() && !horizontally_scrollable) {
@@ -3475,6 +3474,11 @@ public class Term extends JComponent implements Accessible {
 
 	@Override
         public void op_attr(int attr) {
+            this.op_attr(List.of(attr));
+        }
+
+	@Override
+        public void op_attr(List<Integer> attr) {
             if (debugOps()) {
                 System.out.println("op_attr(" + attr + ")"); // NOI18N
             }
@@ -3615,7 +3619,7 @@ public class Term extends JComponent implements Accessible {
         }
 
         @Override
-	@SuppressWarnings({"ValueOfIncrementOrDecrementUsed", "ValueOfIncrementOrDecrementUsed"})
+	@SuppressWarnings({"ValueOfIncrementOrDecrementUsed", "ValueOfIncrementOrDecrementUsed", "AssignmentToMethodParameter"})
         public void op_cht(int n) {
             if (debugOps()) {
                 System.out.printf("op_cht(%d)\n", n); // NOI18N
@@ -3659,18 +3663,11 @@ public class Term extends JComponent implements Accessible {
             }
 
             switch (sel.intersection(st.cursor.row - 1)) {
-                case Sel.INT_NONE:
-                case Sel.INT_ABOVE:
-                case Sel.INT_ON:
-                    // nothing to do
-                    break;
-                case Sel.INT_STRADDLES:
-                    sel.cancel(true);	// DtTerm behaviour
-                    break;
-                case Sel.INT_BELOW:
-                    sel.adjust(firsta, +1, firsta + buf.nlines());
-                    break;
+                case Sel.INT_NONE, Sel.INT_ABOVE, Sel.INT_ON -> {} // nothing to do
+                case Sel.INT_STRADDLES -> sel.cancel(true);	// DtTerm behaviour
+                case Sel.INT_BELOW -> sel.adjust(firsta, +1, firsta + buf.nlines());
             }
+
         }
 
 	@Override
@@ -3737,35 +3734,29 @@ public class Term extends JComponent implements Accessible {
             }
             Line l = cursor_line();
             switch (code) {
-                case 0:         // from cursor to end
+                case 0 -> {       // from cursor to end
                     l.clearToEndFrom(Term.this,
                                      l.cellToBuf(metrics, st.cursor.col),
                                      buf.visibleCols()-1,
-                                     Attr.BGCOLOR.get(st.attr));
-                    break;
-                case 1:         // from beginning to cursor (inclusive)
+                                     st.attr.bgColorVariant());
+                }
+                case 1 ->  {      // from beginning to cursor (inclusive)
                     l.clearTo(Term.this,
                               l.cellToBuf(metrics, st.cursor.col),
-                              Attr.BGCOLOR.get(st.attr));
-                    break;
-                case 2:         // whole line
+                              st.attr.bgColorVariant());
+                }
+                case 2 -> {       // whole line
                     l.clearToEndFrom(Term.this,
                                      0,
                                      buf.visibleCols()-1,
-                                     Attr.BGCOLOR.get(st.attr));
-                    break;
+                                     st.attr.bgColorVariant());
+                }
             }
             switch (sel.intersection(st.cursor.row)) {
-                case Sel.INT_NONE:
-                case Sel.INT_ABOVE:
-                case Sel.INT_BELOW:
-                    // nothing to do
-                    break;
-                case Sel.INT_ON:
-                case Sel.INT_STRADDLES:
-                    sel.cancel(true);	// DtTerm behaviour
-                    break;
+                case Sel.INT_NONE, Sel.INT_ABOVE, Sel.INT_BELOW -> {} // nothing to do
+                case Sel.INT_ON, Sel.INT_STRADDLES -> sel.cancel(true);	// DtTerm behaviour
             }
+
         }
 
 	@Override
@@ -3780,16 +3771,10 @@ public class Term extends JComponent implements Accessible {
             }
 
             switch (sel.intersection(st.cursor.row)) {
-                case Sel.INT_NONE:
-                case Sel.INT_ABOVE:
-                    // nothing to do
-                    break;
-                case Sel.INT_BELOW:
-                case Sel.INT_ON:
-                case Sel.INT_STRADDLES:
-                    sel.cancel(true);	// DtTerm behaviour
-                    break;
+                case Sel.INT_NONE, Sel.INT_ABOVE -> {} // nothing to do
+                case Sel.INT_BELOW, Sel.INT_ON, Sel.INT_STRADDLES -> sel.cancel(true);	// DtTerm behaviour
             }
+
         }
 
 	@Override
@@ -3812,50 +3797,44 @@ public class Term extends JComponent implements Accessible {
             }
             Line l;
             switch (code) {
-                case 0:         // from cursor to end
+                case 0 -> {       // from cursor to end
                     l = cursor_line();
                     // l.setAboutToWrap(false);
                     l.clearToEndFrom(Term.this,
                                      l.cellToBuf(metrics, st.cursor.col),
                                      buf.visibleCols()-1,
-                                     Attr.BGCOLOR.get(st.attr));
+                                     st.attr.bgColorVariant());
                     for (int lx = st.cursor.row+1; lx < beginx() + st.rows; lx++) {
                         l = buf.lineAt(lx);
                         // l.setAboutToWrap(false);
-                        l.reset(Term.this, buf.visibleCols()-1, Attr.BGCOLOR.get(st.attr));
+                        l.reset(Term.this, buf.visibleCols()-1, st.attr.bgColorVariant());
                     }
-                    break;
-                case 1:         // from beginning to cursor (inclusive)
+                }
+                case 1 -> {       // from beginning to cursor (inclusive)
                     for (int lx = beginx(); lx < st.cursor.row; lx++) {
                         l = buf.lineAt(lx);
                         // l.setAboutToWrap(false);
-                        l.reset(Term.this, buf.visibleCols()-1, Attr.BGCOLOR.get(st.attr));
+                        l.reset(Term.this, buf.visibleCols()-1, st.attr.bgColorVariant());
                     }
                     l = cursor_line();
                     // l.setAboutToWrap(false);
                     l.clearTo(Term.this,
                               l.cellToBuf(metrics, st.cursor.col),
-                              Attr.BGCOLOR.get(st.attr));
-                    break;
-                case 2:         // whole screen
+                              st.attr.bgColorVariant());
+                }
+                case 2 -> {       // whole screen
                     for (int lx = beginx(); lx < beginx() + st.rows; lx++) {
                         l = buf.lineAt(lx);
                         // l.setAboutToWrap(false);
-                        l.reset(Term.this, buf.visibleCols()-1, Attr.BGCOLOR.get(st.attr));
+                        l.reset(Term.this, buf.visibleCols()-1, st.attr.bgColorVariant());
                     }
-                    break;
+                }
             }
             switch (sel.intersection(st.cursor.row)) {
-                case Sel.INT_NONE:
-                case Sel.INT_ABOVE:
-                case Sel.INT_BELOW:
-                    // nothing to do
-                    break;
-                case Sel.INT_ON:
-                case Sel.INT_STRADDLES:
-                    sel.cancel(true);	// DtTerm behaviour
-                    break;
+                case Sel.INT_NONE, Sel.INT_ABOVE, Sel.INT_BELOW -> {} // nothing to do
+                case Sel.INT_ON, Sel.INT_STRADDLES -> sel.cancel(true);	// DtTerm behaviour
             }
+
         }
 
 	@Override
@@ -3901,17 +3880,9 @@ public class Term extends JComponent implements Accessible {
             }
 
             switch (sel.intersection(st.cursor.row)) {
-                case Sel.INT_NONE:
-                case Sel.INT_ABOVE:
-                    // nothing to do
-                    break;
-                case Sel.INT_ON:
-                case Sel.INT_STRADDLES:
-                    sel.cancel(true);	// DtTerm behaviour
-                    break;
-                case Sel.INT_BELOW:
-                    sel.adjust(firsta, -1, firsta + buf.nlines());
-                    break;
+                case Sel.INT_NONE, Sel.INT_ABOVE -> {} // nothing to do
+                case Sel.INT_ON, Sel.INT_STRADDLES -> sel.cancel(true);	// DtTerm behaviour
+                case Sel.INT_BELOW -> sel.adjust(firsta, -1, firsta + buf.nlines());
             }
         }
 
@@ -4263,7 +4234,7 @@ public class Term extends JComponent implements Accessible {
                     "  repaint " + n_repaint + // NOI18N
                     "  paint " + n_paint;		// NOI18N
 
-            setAttribute(41);	// Red Bg
+            setAttribute(List.of(41));	// Red Bg
 
             // can't use appendText from within ops.
 
@@ -4276,7 +4247,7 @@ public class Term extends JComponent implements Accessible {
                 op_char(output2.charAt(sx));
             }
 
-            setAttribute(0);
+            setAttribute(List.of(0));
 
             last_time = time;
             n_putchar = 0;
@@ -4316,7 +4287,7 @@ public class Term extends JComponent implements Accessible {
             st.setG(3, 0);
 
             resetMargins();
-	    setAttribute(0);
+	    setAttribute(List.of(0));
 
             interp.softReset();
 
@@ -4335,42 +4306,37 @@ public class Term extends JComponent implements Accessible {
 	@Override
         public void op_set_mode(int mode) {
             switch (mode) {
-                case 4:		// insert mode
+                case 4 -> // insert mode
                     st.overstrike = false;
-                    break;
-                case 2:		// keyboard lock
-                case 12:	// local echo off
-                case 20:	// newline
+                case 2 /* keyboard unlock */, 12 /* local echo on */, 20 /* newline */ -> {
                     // Currently unsupported
-                    break;
+                }
             }
         }
 
 	@Override
         public void op_reset_mode(int mode) {
             switch (mode) {
-                case 4:		// replace mode
+                case 4 -> {	// replace mode
                     st.overstrike = true;
-                    break;
-                case 2:		// keyboard unlock
-                case 12:	// local echo on
-                case 20:	// newline
+                }
+                case 2 /* keyboard unlock */, 12 /* local echo on */, 20 /* newline */ -> {
                     // Currently unsupported
-                    break;
+                }
             }
         }
 
 	@Override
         public void op_status_report(int code) {
             switch (code) {
-                case 5:
+                case 5 -> {
                     reply((char) 27 + "[0n");	// NOI18N
-                    break;
-                case 6:
+                }
+                case 6 -> {
                     reply((char) 27 + "[" + // NOI18N
                             (st.cursor.row - st.firstx) + ";" + // NOI18N
                             st.cursor.col + "R");			// NOI18N
-                    break;
+                }
             }
         }
 
@@ -4454,18 +4420,11 @@ public class Term extends JComponent implements Accessible {
             int to = l.cellToBuf(metrics, st.cursor.col+n-1);
             if (debugOps())
                 System.out.printf("op_ech() from %d  to %d\n", from, to); // NOI18N
-            l.clearFromTo(Term.this, from, to, Attr.BGCOLOR.get(st.attr));
+            l.clearFromTo(Term.this, from, to, st.attr.bgColorVariant());
 
+            // Ignore Sel.INT_NONE, Sel.INT_ABOVE, Sel.INT_BELOW
             switch (sel.intersection(st.cursor.row)) {
-                case Sel.INT_NONE:
-                case Sel.INT_ABOVE:
-                case Sel.INT_BELOW:
-                    // nothing to do
-                    break;
-                case Sel.INT_ON:
-                case Sel.INT_STRADDLES:
-                    sel.cancel(true);	// DtTerm behaviour
-                    break;
+                case Sel.INT_ON, Sel.INT_STRADDLES -> sel.cancel(true);	// DtTerm behaviour
             }
         }
 
@@ -4502,83 +4461,42 @@ public class Term extends JComponent implements Accessible {
                 final char outChar = interp.mapACS(inChar);
                 if (outChar == '\0')
                     return inChar;
-                switch (outChar) {
-                    default:
-                        return inChar;
-
+                return switch (outChar) {
                     // xterm and gnome term don't really honor these:
-                    case '+':            // ACS_RARROW
-                        return '\u2192'; // RIGHTWARDS ARROW
-                    case ',':            // ACS_LARROW
-                        return '\u2190'; // LEFTWARDS ARROW
-                    case '-':            // ACS_UARROW
-                        return '\u2191'; // UPWARDS ARROW
-                    case '.':            // ACS_DARROW
-                        return '\u2193'; // DOWNWARDS ARROW
-                    case '0':            // ACS_BLOCK
-                        return '\u2588'; // FULL BLOCK
-
-
-                    case '`':            // ACS_DIAMOND
-                        return '\u2666'; // BLACK DIAMOND SUIT
-                    case 'a':            // ACS_CKBOARD
-                        return '\u2592'; // MEDIUM SHADE
-                        // return '\u2593'; // DARK SHADE
-                    case 'b':            // ?
-                        return '\u240b'; // SYMBOL FOR VERTICAL TABULATION
-                    case 'c':            // ?
-                        return '\u240c'; // SYMBOL FOR FORM FEED
-                    case 'd':            // ?
-                        return '\u240d'; // SYMBOL FOR CARRIAGE RETURN
-                    case 'e':            // ?
-                        return '\u240a'; // SYMBOL FOR LINE FEED
-                    case 'f':            // ACS_DEGREE
-                        return '\u00b0'; // DEGREE SIGN
-                    case 'g':            // ACS_PLMINUS
-                        return '\u00b1'; // PLUS-MINUS SIGN
-                    case 'h':            // ACS_PLMINUS
-                        return '\u2424'; // SYMBOL FOR NEW LINE
-                    case 'i':            // ACS_LANTERN
-                        return '\u240b'; // SYMBOL FOR VERTICAL TABULATION
-                    case 'j':            // ACS_LRCORNER
-                        return '\u2518'; // BOX DRAWINGS LIGHT UP AND LEFT
-                    case 'k':            // ACS_LRCORNER
-                        return '\u2510'; // BOX DRAWINGS LIGHT DOWN AND LEFT
-                    case 'l':            // ACS_LRCORNER
-                        return '\u250c'; // BOX DRAWINGS LIGHT DOWN AND RIGHT
-                    case 'm':            // ACS_LLCORNER
-                        return '\u2514'; // BOX DRAWINGS LIGHT UP AND RIGHT
-                    case 'n':            // ACS_PLUS
-                        return '\u253c'; // BOX DRAWINGS LIGHT VERTICAL AND HORIZONTAL
-                    case 'v':            // ACS_RTEE
-                        return '\u2534'; // BOX DRAWINGS LIGHT UP AND HORIZONTAL
-                    case 'w':            // ACS_TTEE
-                        return '\u252c'; // BOX DRAWINGS LIGHT DOWN AND HORIZONTAL
-                    case 'o':            // ACS_S1
-                    case 'p':            // ACS_S3
-                    case 'q':            // ACS_HLINE
-                    case 'r':            // ACS_S7
-                    case 's':            // ACS_S9
-                        return '\u2500'; // BOX DRAWINGS LIGHT HORIZONTAL
-                    case 't':            // ACS_LTEE
-                        return '\u251c'; // BOX DRAWINGS LIGHT VERTICAL AND RIGHT
-                    case 'u':            // ACS_RTEE
-                        return '\u2524'; // BOX DRAWINGS LIGHT VERTICAL AND LEFT
-                    case 'x':            // ACS_VLINE
-                        return '\u2502'; // BOX DRAWINGS LIGHT VERTICAL
-                    case 'y':            // ACS_LEQUAL
-                        return '\u2264'; // LESS-THAN OR EQUAL TO
-                    case 'z':            // ACS_GEQUAL
-                        return '\u2265'; // GREATER-THAN OR EQUAL TO
-                    case '{':            // ACS_PI
-                        return '\u03c0'; // GREEK SMALL LETTER PI
-                    case '|':            // ACS_NEQUAL
-                        return '\u2260'; // NOT EQUAL TO
-                    case '}':            // ACS_STERLING
-                        return '\u00a3'; // POUND SIGN
-                    case '~':            // ACS_BULLET
-                        return '\u00b7'; // MIDDLE DOT
-                }
+                    case '+' -> '\u2192'; // ACS_RARROW -> RIGHTWARDS ARROW
+                    case ',' -> '\u2190'; // ACS_LARROW -> LEFTWARDS ARROW
+                    case '-' -> '\u2191'; // ACS_UARROW -> UPWARDS ARROW
+                    case '.' -> '\u2193'; // ACS_DARROW -> DOWNWARDS ARROW
+                    case '0' -> '\u2588'; // ACS_BLOCK -> FULL BLOCK
+                    case '`' -> '\u2666'; // ACS_DIAMOND -> BLACK DIAMOND SUIT
+                    case 'a' -> '\u2592'; // ACS_CKBOARD -> MEDIUM SHADE (Alt: \u2592 DARK SHADE)
+                    case 'b' -> '\u240b'; // ? -> SYMBOL FOR VERTICAL TABULATION
+                    case 'c' -> '\u240c'; // ? -> SYMBOL FOR FORM FEED
+                    case 'd' -> '\u240d'; // ? -> SYMBOL FOR CARRIAGE RETURN
+                    case 'e' -> '\u240a'; // ? -> SYMBOL FOR LINE FEED
+                    case 'f' -> '\u00b0'; // ACS_DEGREE -> DEGREE SIGN
+                    case 'g' -> '\u00b1'; // ACS_PLMINUS -> PLUS-MINUS SIGN
+                    case 'h' -> '\u2424'; // ACS_PLMINUS -> SYMBOL FOR NEW LINE
+                    case 'i' -> '\u240b'; // ACS_LANTERN -> SYMBOL FOR VERTICAL TABULATION
+                    case 'j' -> '\u2518'; // ACS_LRCORNER -> BOX DRAWINGS LIGHT UP AND LEFT
+                    case 'k' -> '\u2510'; // ACS_LRCORNER -> BOX DRAWINGS LIGHT DOWN AND LEFT
+                    case 'l' -> '\u250c'; // ACS_LRCORNER -> BOX DRAWINGS LIGHT DOWN AND RIGHT
+                    case 'm' -> '\u2514'; // ACS_LLCORNER -> BOX DRAWINGS LIGHT UP AND RIGHT
+                    case 'n' -> '\u253c'; // ACS_PLUS -> BOX DRAWINGS LIGHT VERTICAL AND HORIZONTAL
+                    case 'v' -> '\u2534'; // ACS_RTEE -> BOX DRAWINGS LIGHT UP AND HORIZONTAL
+                    case 'w' -> '\u252c'; // ACS_TTEE -> BOX DRAWINGS LIGHT DOWN AND HORIZONTAL
+                    case 'o', 'p', 'q', 'r', 's'-> '\u2500'; // ACS_S1, ACS_S3, ACS_HLINE, ACS_S7, ACS_S9 -> BOX DRAWINGS LIGHT HORIZONTAL
+                    case 't' -> '\u251c'; // ACS_LTEE -> BOX DRAWINGS LIGHT VERTICAL AND RIGHT
+                    case 'u' -> '\u2524'; // ACS_RTEE -> BOX DRAWINGS LIGHT VERTICAL AND LEFT
+                    case 'x' -> '\u2502'; // ACS_VLINE -> BOX DRAWINGS LIGHT VERTICAL
+                    case 'y' -> '\u2264'; // ACS_LEQUAL -> LESS-THAN OR EQUAL TO
+                    case 'z' -> '\u2265'; // ACS_GEQUAL -> GREATER-THAN OR EQUAL TO
+                    case '{' -> '\u03c0'; // ACS_PI -> GREEK SMALL LETTER PI
+                    case '|' -> '\u2260'; // ACS_NEQUAL -> NOT EQUAL TO
+                    case '}' -> '\u00a3'; // ACS_STERLING -> POUND SIGN
+                    case '~' -> '\u00b7'; // ACS_BULLET -> MIDDLE DOT
+                    default -> inChar;
+                };
             }
         }
     }
@@ -5838,9 +5756,13 @@ public class Term extends JComponent implements Accessible {
     public final void setFont(Font new_font) {
         Font font;
         if (isFixedFont()) {
-            font = new_font;
+            font = StyleContext.getDefaultStyleContext().getFont(
+                            new_font.getName(),
+                            new_font.getStyle(),
+                            new_font.getSize());
         } else {
-            font = new Font(Font.MONOSPACED,	// NOI18N
+            font = StyleContext.getDefaultStyleContext().getFont(
+                            "Monospaced",	// NOI18N
                             new_font.getStyle(),
                             new_font.getSize());
         }
@@ -5856,7 +5778,7 @@ public class Term extends JComponent implements Accessible {
          */
 
         // cache the metrics
-        metrics = new MyFontMetrics(this);
+        metrics = new MyFontMetrics(this, font);
         updateScreenSize();
     }
 
@@ -6088,34 +6010,22 @@ public class Term extends JComponent implements Accessible {
         return rect;
     }
 
-    private Color csetBG(int attr) {
-	final int px = Attr.backgroundColor(attr);
-	final Color c = palette[px];
-	return c;
-    }
-
-    private Color csetFG(int attr) {
-	final int px = Attr.foregroundColor(attr);
-        final Color c = palette[px];
-	return c;
-    }
-
-    Color backgroundColor(boolean reverse, int attr) {
+    Color backgroundColor(boolean reverse, Attr attr) {
         final Color c;
         if (reverse) {
-	    c = csetFG(attr);
+	    c = attr.getFGcolor(palette);
         } else {
-	    c = csetBG(attr);
+	    c = attr.getBGColor(palette);
         }
         return c;
     }
 
-    Color foregroundColor(boolean reverse, int attr) {
+    Color foregroundColor(boolean reverse, Attr attr) {
         final Color c;
         if (reverse) {
-	    c = csetBG(attr);
+	    c = attr.getBGColor(palette);
         } else {
-	    c = csetFG(attr);
+	    c = attr.getFGcolor(palette);
         }
         return c;
     }

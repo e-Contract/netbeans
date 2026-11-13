@@ -31,16 +31,14 @@ import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.Vector;
 import java.util.logging.Level;
-import java.util.logging.Logger;
+
 import javax.swing.ComboBoxModel;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
@@ -51,19 +49,16 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
-import org.netbeans.api.project.Project;
-import org.netbeans.api.project.ui.OpenProjects;
+
 import org.netbeans.modules.subversion.Subversion;
 import org.netbeans.modules.subversion.SvnModuleConfig;
 import org.netbeans.modules.subversion.client.SvnClientFactory;
 import org.netbeans.modules.subversion.util.SvnUtils;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.HelpCtx;
 import org.openide.util.Mutex;
 import org.openide.util.NbBundle;
-import org.tigris.subversion.svnclientadapter.SVNClientException;
 import org.tigris.subversion.svnclientadapter.SVNRevision;
 import org.tigris.subversion.svnclientadapter.SVNUrl;
 
@@ -72,12 +67,12 @@ import org.tigris.subversion.svnclientadapter.SVNUrl;
  */
 public class Repository implements ActionListener, DocumentListener, ItemListener {
     
-    public final static int FLAG_URL_EDITABLE           = 2;
-    public final static int FLAG_URL_ENABLED            = 4;
-    public final static int FLAG_ACCEPT_REVISION        = 8;
-    public final static int FLAG_SHOW_REMOVE            = 16;
-    public final static int FLAG_SHOW_HINTS             = 32;    
-    public final static int FLAG_SHOW_PROXY             = 64;    
+    public static final int FLAG_URL_EDITABLE           = 2;
+    public static final int FLAG_URL_ENABLED            = 4;
+    public static final int FLAG_ACCEPT_REVISION        = 8;
+    public static final int FLAG_SHOW_REMOVE            = 16;
+    public static final int FLAG_SHOW_HINTS             = 32;    
+    public static final int FLAG_SHOW_PROXY             = 64;    
 
     private static final String FILE_PANEL        = "file-panel";       //NOI18N
     private static final String HTTP_PANEL        = "http-panel";       //NOI18N
@@ -218,10 +213,7 @@ public class Repository implements ActionListener, DocumentListener, ItemListene
         Runnable notInAWT = new Runnable() {
             @Override
             public void run() {
-                List<RepositoryConnection> recentUrls = SvnModuleConfig.getDefault().getRecentUrls();
-                final Set<RepositoryConnection> recentRoots = new LinkedHashSet<RepositoryConnection>();
-                recentRoots.addAll(recentUrls);
-                addProjects(recentRoots);
+                final Set<RepositoryConnection> recentRoots = SvnUtils.getKnownRepositoryRoots();
                 if (repositoryPanel.urlComboBox.isEditable()) {
                     // templates for supported connection methods
                     recentRoots.add(new RepositoryConnection("file:///"));      // NOI18N
@@ -250,25 +242,6 @@ public class Repository implements ActionListener, DocumentListener, ItemListene
                         updateVisibility();
                     }
                 });
-            }
-
-            private void addProjects (final Set<RepositoryConnection> recentRoots) {
-                for (Project p : OpenProjects.getDefault().getOpenProjects()) {
-                    File projectFolder = FileUtil.toFile(p.getProjectDirectory());
-                    if (projectFolder != null && SvnUtils.isManaged(projectFolder)) {
-                        try {
-                            SVNUrl repositoryUrl = SvnUtils.getRepositoryRootUrl(projectFolder);
-                            if (repositoryUrl != null) {
-                                RepositoryConnection rc = new RepositoryConnection(repositoryUrl.toString());
-                                if (!recentRoots.contains(rc)) {
-                                    recentRoots.add(rc);
-                                }
-                            }
-                        } catch (SVNClientException ex) {
-                            Logger.getLogger(Repository.class.getName()).log(Level.FINE, null, ex);
-                        }
-                    }
-                }
             }
         };
         if (EventQueue.isDispatchThread()) {

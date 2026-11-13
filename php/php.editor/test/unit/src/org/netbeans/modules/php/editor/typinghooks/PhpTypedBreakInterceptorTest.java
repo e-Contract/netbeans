@@ -921,6 +921,106 @@ public class PhpTypedBreakInterceptorTest extends PhpTypinghooksTestBase {
         );
     }
 
+    public void testAttributeSyntax_01() throws Exception {
+        insertBreak(
+                "" // original
+                + "#[^]\n"
+                + "class Test {\n"
+                + "}",
+                "" // expected
+                + "#[\n"
+                + "    ^\n"
+                + "]\n"
+                + "class Test {\n"
+                + "}"
+        );
+    }
+
+    public void testConstructorPropertyPromotion_01() throws Exception {
+        insertBreak(
+                "" // original
+                + "class Test {\n"
+                + "    public function __construct(^){}\n"
+                + "}",
+                "" // expected
+                + "class Test {\n"
+                + "    public function __construct(\n"
+                + "            ^\n"
+                + "    ){}\n"
+                + "}"
+        );
+    }
+
+    public void testConstructorPropertyPromotion_02() throws Exception {
+        insertBreak(
+                "" // original
+                + "class Test {\n"
+                + "    public function __construct(\n"
+                + "            private int $field,^\n"
+                + "    ){}\n"
+                + "}",
+                "" // expected
+                + "class Test {\n"
+                + "    public function __construct(\n"
+                + "            private int $field,\n"
+                + "            ^\n"
+                + "    ){}\n"
+                + "}"
+        );
+    }
+
+    public void testConstructorPropertyPromotion_03() throws Exception {
+        insertBreak(
+                "" // original
+                + "class Test {\n"
+                + "    public function __construct(\n"
+                + "            private int|string $field = \"default value\",^\n"
+                + "    ){}\n"
+                + "}",
+                "" // expected
+                + "class Test {\n"
+                + "    public function __construct(\n"
+                + "            private int|string $field = \"default value\",\n"
+                + "            ^\n"
+                + "    ){}\n"
+                + "}"
+        );
+    }
+
+    public void testConstructorPropertyPromotion_04() throws Exception {
+        insertBreak(
+                "" // original
+                + "class Test {\n"
+                + "    public function __construct(\n"
+                + "            private ?string $field1,^\n"
+                + "            private int|string $field2 = \"default value\",\n"
+                + "    ){}\n"
+                + "}",
+                "" // expected
+                + "class Test {\n"
+                + "    public function __construct(\n"
+                + "            private ?string $field1,\n"
+                + "            ^\n"
+                + "            private int|string $field2 = \"default value\",\n"
+                + "    ){}\n"
+                + "}"
+        );
+    }
+
+    public void testConstructorPropertyPromotion_05() throws Exception {
+        insertBreak(
+                "" // original
+                + "class Test {\n"
+                + "    public function __construct(private int $field,^){}\n"
+                + "}",
+                "" // expected
+                + "class Test {\n"
+                + "    public function __construct(private int $field,\n"
+                + "            ^){}\n"
+                + "}"
+        );
+    }
+
     // #230814
     public void testDoNotInsertCommentAsterisk_01() throws Exception {
         insertBreakMultiLineComment(
@@ -1221,4 +1321,231 @@ public class PhpTypedBreakInterceptorTest extends PhpTypinghooksTestBase {
         );
     }
 
+    public void testHookedField_01() throws Exception {
+        insertBreak(
+                // original
+                """
+                class PropertyHooksClass {
+                    public $test {^
+                }
+                """
+                ,
+                // expected
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        ^
+                    }
+                }
+                """
+        );
+    }
+
+    public void testHookedField_02() throws Exception {
+        insertBreak(
+                // original
+                """
+                class PropertyHooksClass {
+                    public $test1 {
+                    }
+                    public $test2 {^
+                }
+                """
+                ,
+                // expected
+                """
+                class PropertyHooksClass {
+                    public $test1 {
+                    }
+                    public $test2 {
+                        ^
+                    }
+                }
+                """
+        );
+    }
+
+    public void testPropertyHook_01() throws Exception {
+        insertBreak(
+                // original
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get {^
+                    }
+                }
+                """
+                ,
+                // expected
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get {
+                            ^
+                        }
+                    }
+                }
+                """
+        );
+    }
+
+    public void testPropertyHook_02() throws Exception {
+        insertBreak(
+                // original
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get {
+                        }
+                        set {^
+                    }
+                }
+                """
+                ,
+                // expected
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get {
+                        }
+                        set {
+                            ^
+                        }
+                    }
+                }
+                """
+        );
+    }
+
+    public void testInsertBreakBeforeCurlyClose_01() throws Exception {
+        insertBreak(
+                // original
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get { return 100; }
+                    }
+                    public function test() {
+                        return "${test}";
+                    }
+                ^}
+                """
+                ,
+                // expected
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get { return 100; }
+                    }
+                    public function test() {
+                        return "${test}";
+                    }
+                
+                    ^
+                }
+                """
+        );
+    }
+
+    public void testInsertBreakBeforeCurlyClose_02() throws Exception {
+        insertBreak(
+                // original
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get {
+                            return 100;
+                        }
+                    }
+                    public function test() {
+                        return "${test}";
+                    ^}
+                }
+                """
+                ,
+                // expected
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get {
+                            return 100;
+                        }
+                    }
+                    public function test() {
+                        return "${test}";
+                   \s
+                        ^
+                    }
+                }
+                """
+        );
+    }
+
+    public void testInsertBreakBeforeCurlyClose_03() throws Exception {
+        insertBreak(
+                // original
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get {
+                            return 100;
+                        }
+                    ^}
+                    public function test() {
+                        return "${test}";
+                    }
+                }
+                """
+                ,
+                // expected
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get {
+                            return 100;
+                        }
+                   \s
+                        ^
+                    }
+                    public function test() {
+                        return "${test}";
+                    }
+                }
+                """
+        );
+    }
+
+    public void testInsertBreakBeforeCurlyClose_04() throws Exception {
+        insertBreak(
+                // original
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get {
+                            return 100;
+                        ^}
+                    }
+                    public function test() {
+                        return "${test}";
+                    }
+                }
+                """
+                ,
+                // expected
+                """
+                class PropertyHooksClass {
+                    public $test {
+                        get {
+                            return 100;
+                       \s
+                            ^
+                        }
+                    }
+                    public function test() {
+                        return "${test}";
+                    }
+                }
+                """
+        );
+    }
 }

@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import org.eclipse.jgit.dircache.DirCache;
 import org.eclipse.jgit.dircache.DirCacheEntry;
+import org.eclipse.jgit.lib.ConfigConstants;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
@@ -60,6 +61,7 @@ public class AbstractGitTestCase extends NbTestCase {
     private final File repositoryLocation;
     private JGitRepository localRepository;
     protected static final ProgressMonitor NULL_PROGRESS_MONITOR = new NullProgressMonitor ();
+    private String defaultBranchName;
     
     public AbstractGitTestCase (String testName) throws IOException {
         super(testName);
@@ -170,6 +172,15 @@ public class AbstractGitTestCase extends NbTestCase {
             localRepository = (JGitRepository) f.get(fact);
             client.release();
         }
+        // cache defaut branch name
+        defaultBranchName = repository.getConfig().getString(ConfigConstants.CONFIG_INIT_SECTION, null, ConfigConstants.CONFIG_KEY_DEFAULT_BRANCH);
+        if (defaultBranchName == null) {
+            defaultBranchName = Constants.MASTER;
+        }
+    }
+    
+    protected String getDefaultBranch() {
+        return defaultBranchName;
     }
 
     protected GitClient getClient (File repository) throws GitException {
@@ -219,8 +230,8 @@ public class AbstractGitTestCase extends NbTestCase {
             DirCacheEntry e = cache.getEntry(relativePath);
             assertNotNull(e);
             assertEquals(relativePath, e.getPathString());
-            if (f.lastModified() != e.getLastModified()) {
-                assertEquals((f.lastModified() / 1000) * 1000, (e.getLastModified() / 1000) * 1000);
+            if (f.lastModified() != e.getLastModifiedInstant().toEpochMilli()) {
+                assertEquals((f.lastModified() / 1000) * 1000, (e.getLastModifiedInstant().toEpochMilli() / 1000) * 1000);
             }
             try (InputStream in = new FileInputStream(f)) {
                 assertEquals(e.getObjectId(), repository.newObjectInserter().idFor(Constants.OBJ_BLOB, f.length(), in));

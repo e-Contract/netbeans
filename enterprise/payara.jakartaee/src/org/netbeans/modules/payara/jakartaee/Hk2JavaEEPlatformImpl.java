@@ -26,7 +26,7 @@ import java.net.URL;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.netbeans.modules.payara.tooling.data.PayaraVersion;
+import org.netbeans.modules.payara.tooling.data.PayaraPlatformVersionAPI;
 import org.netbeans.modules.payara.tooling.server.config.JavaEEProfile;
 import org.netbeans.modules.payara.tooling.server.config.JavaSEPlatform;
 import org.netbeans.modules.payara.tooling.server.config.ModuleType;
@@ -108,10 +108,7 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
     /** Jersey Library support. */
     private final Hk2LibraryProvider libraryProvider;
 
-    ////////////////////////////////////////////////////////////////////////////
     // Static methods                                                         //
-    ////////////////////////////////////////////////////////////////////////////
-
     /**
      * Constructor helper to initialize local Lookup instance.
      * <p/>
@@ -196,6 +193,22 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
                 case v8_0_0_web: profiles[index++] = Profile.JAKARTA_EE_8_WEB;
                                break;
                 case v8_0_0:     profiles[index++] = Profile.JAKARTA_EE_8_FULL;
+                               break;
+                case v9_0_0_web: profiles[index++] = Profile.JAKARTA_EE_9_WEB;
+                               break;
+                case v9_0_0:     profiles[index++] = Profile.JAKARTA_EE_9_FULL;
+                               break;
+                case v9_1_0_web: profiles[index++] = Profile.JAKARTA_EE_9_1_WEB;
+                               break;
+                case v9_1_0:     profiles[index++] = Profile.JAKARTA_EE_9_1_FULL;
+                               break;
+                case v10_0_0_web: profiles[index++] = Profile.JAKARTA_EE_10_WEB;
+                               break;
+                case v10_0_0:     profiles[index++] = Profile.JAKARTA_EE_10_FULL;
+                               break;
+                case v11_0_0_web: profiles[index++] = Profile.JAKARTA_EE_11_WEB;
+                               break;
+                case v11_0_0:     profiles[index++] = Profile.JAKARTA_EE_11_FULL;
                                break;
             }
         } else {
@@ -283,10 +296,7 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
         return moduleTypeSet;
     }
 
-    ////////////////////////////////////////////////////////////////////////////
     // Constructors                                                           //
-    ////////////////////////////////////////////////////////////////////////////
-
     /**
      * Creates an instance of Payara JavaEE platform.
      * <p/>
@@ -493,7 +503,7 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
                         cPath.add(f);
                     }
                 }
-                return cPath.toArray(new File[cPath.size()]);
+                return cPath.toArray(new File[0]);
             }
 
             if (TOOL_WSCOMPILE.equals(toolName)) {
@@ -506,7 +516,7 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
                         cPath.add(f);
                     }
                 }
-                return cPath.toArray(new File[cPath.size()]);
+                return cPath.toArray(new File[0]);
             }
 
             File domainDir;
@@ -696,15 +706,15 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
 
     /**
      * Get Payara version.
-     * Returns {@see PayaraVersion} for current Payara server instance.
+     * Returns {@see PayaraPlatformVersionAPI} for current Payara server instance.
      * <p/>
      * @return Payara version.
      */
-    private PayaraVersion getPFVersion() {
-        PayaraVersion version = null;
+    private PayaraPlatformVersionAPI getPFVersion() {
+        PayaraPlatformVersionAPI version = null;
         try {
             version = dm
-                    .getCommonServerSupport().getInstance().getVersion();
+                    .getCommonServerSupport().getInstance().getPlatformVersion();
         } catch (NullPointerException npe) {
             Logger.getLogger("payara-jakartaee").log(Level.INFO,
                     "Caught NullPointerException in Hk2JavaEEPlatformImpl "
@@ -721,10 +731,9 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
      *         for Payara.
      */
     private String getAccConfigFile() {
-        final PayaraVersion version = getPFVersion();
+        final PayaraPlatformVersionAPI version = getPFVersion();
         final String accConfigFile;
-        if (version != null
-                && version.ordinal() >= PayaraVersion.PF_4_1_144.ordinal()) {
+        if (version != null && version.isMinimumSupportedVersion()) {
             accConfigFile = GF_ACC_XML;
         } else {
             accConfigFile = SUN_ACC_XML;
@@ -828,15 +837,16 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
             }
             // TODO: Rewrite to use Hk2LibraryProvider#getJaxRsName()
             // or getJaxRsClassPathURLs()
-            final PayaraVersion version = getPFVersion();
+            final PayaraPlatformVersionAPI version = getPFVersion();
             try {
                 if (version == null) {
                     return false;
-                }
-                else if (version.equalsMajorMinor(PayaraVersion.PF_4_1_144)) {
-                    final File javaxWsRs = ServerUtilities.getJarName(dm.getProperties().
-                            getPayaraRoot(), "javax.ws.rs-api.jar"); // NOI18N
-                    if ( javaxWsRs== null || !javaxWsRs.exists()){
+                } else if (version.getMajor() == 4) {
+                    final File javaxWsRs = ServerUtilities.getJarName(
+                            dm.getProperties().getPayaraRoot(),
+                            "javax.ws.rs-api.jar" // NOI18N
+                    );
+                    if (javaxWsRs == null || !javaxWsRs.exists()) {
                         return false;
                     }
                     return addJars(project, Collections.singletonList(
@@ -992,8 +1002,7 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
                 else {
                     classPathType = ClassPath.COMPILE;
                 }
-                ProjectClassPathModifier.addRoots(urls.toArray( new URL[ urls.size()]),
-                        sourceRoot, classPathType );
+                ProjectClassPathModifier.addRoots(urls.toArray(new URL[0]), sourceRoot, classPathType);
             }
             catch (UnsupportedOperationException | IOException ex) {
                 return false;
@@ -1006,11 +1015,11 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
          * <p/>
          * @return Payara version from instance stored in deployment manager.
          */
-        private PayaraVersion getPFVersion() {
-            PayaraVersion version = null;
+        private PayaraPlatformVersionAPI getPFVersion() {
+            PayaraPlatformVersionAPI version = null;
             try {
                 version = dm
-                        .getCommonServerSupport().getInstance().getVersion();
+                        .getCommonServerSupport().getInstance().getPlatformVersion();
             } catch (NullPointerException npe) {
                 Logger.getLogger("payara-jakartaee").log(Level.INFO,
                         "Caught NullPointerException in Hk2JavaEEPlatformImpl "

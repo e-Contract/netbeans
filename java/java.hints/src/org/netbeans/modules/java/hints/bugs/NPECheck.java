@@ -20,6 +20,7 @@
 package org.netbeans.modules.java.hints.bugs;
 
 import com.sun.source.tree.*;
+import com.sun.source.tree.CaseTree.CaseKind;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.util.TreePath;
 import java.util.ArrayList;
@@ -49,7 +50,6 @@ import javax.lang.model.util.ElementFilter;
 import org.netbeans.api.annotations.common.CheckForNull;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.support.CancellableTreeScanner;
-import org.netbeans.modules.editor.java.TreeShims;
 import org.netbeans.spi.editor.hints.ErrorDescription;
 import org.openide.util.NbBundle;
 
@@ -227,13 +227,42 @@ public class NPECheck {
     }
     
     
-    @TriggerPattern("switch ($select) { case $cases$; }")
+    @TriggerTreeKind({Kind.SWITCH, Kind.SWITCH_EXPRESSION})
     public static ErrorDescription switchExpression(HintContext ctx) {
-        TreePath select = ctx.getVariables().get("$select");
+        ExpressionTree selector;
+        List<? extends CaseTree> cases;
+        Tree swtch = ctx.getPath().getLeaf();
+
+        switch (swtch.getKind()) {
+            case SWITCH -> {
+                SwitchTree st = (SwitchTree) swtch;
+                selector = st.getExpression();
+                cases = st.getCases();
+            }
+            case SWITCH_EXPRESSION -> {
+                SwitchExpressionTree st = (SwitchExpressionTree) swtch;
+                selector = st.getExpression();
+                cases = st.getCases();
+            }
+            default -> throw new IllegalStateException("Unexpected tree kind: " + swtch.getKind());
+        }
+
+        TreePath select = new TreePath(ctx.getPath(), selector);
         TypeMirror m = ctx.getInfo().getTrees().getTypeMirror(select);
         if (m == null || m.getKind() != TypeKind.DECLARED) {
             return null;
         }
+
+        boolean hasNullCase = cases.stream()
+                                   .flatMap(ct -> ct.getLabels().stream())
+                                   .filter(clt -> clt.getKind() == Kind.CONSTANT_CASE_LABEL)
+                                   .map(ctl -> ((ConstantCaseLabelTree) ctl).getConstantExpression())
+                                   .anyMatch(expr -> expr.getKind() == Kind.NULL_LITERAL);
+
+        if (hasNullCase) {
+            return null;
+        }
+
         State r = computeExpressionsState(ctx).get(select.getLeaf());
         if (r == NULL || r == NULL_HYPOTHETICAL) {
             String displayName = NbBundle.getMessage(NPECheck.class, "ERR_DereferencingNull");
@@ -645,13 +674,7 @@ public class NPECheck {
                 TreePath oldPath = currentPath;
                 try {
                     currentPath = new TreePath(currentPath, tree);
-                    if (TreeShims.SWITCH_EXPRESSION.equals(tree.getKind().name())) {
-                        r = visitSwitchExpression(tree, p);
-                    } else if (TreeShims.YIELD.equals(tree.getKind().name())) {
-                        r = visitYield(tree, p);
-                    } else {
-                        r = super.scan(tree, p);
-                    }
+                    r = super.scan(tree, p);
                 } finally {
                     currentPath = oldPath;
                 }
@@ -1074,12 +1097,16 @@ public class NPECheck {
                 State targetState = null;
 
                 switch (e.getSimpleName().toString()) {
-                    case "assertNotNull": targetState = State.NOT_NULL; break;
+                    case "assertNotNull":
+                    case "requireNonNull":
+                    case "requireNonNullElse":
+                    case "requireNonNullElseGet": targetState = State.NOT_NULL; break;
                     case "assertNull": targetState = State.NULL; break;
                 }
 
                 switch (ownerFQN) {
-                    case "org.testng.Assert": argument = node.getArguments().get(0); break;
+                    case "org.testng.Assert":
+                    case "java.util.Objects": argument = node.getArguments().get(0); break;
                     case "junit.framework.Assert":
                     case "org.junit.Assert": 
                     case "org.junit.jupiter.api.Assertions": argument = node.getArguments().get(node.getArguments().size() - 1); break;
@@ -1263,11 +1290,12 @@ public class NPECheck {
             return null;
         }
 
-        public State visitSwitchExpression(Tree node, Void p) {
+        @Override
+        public State visitSwitchExpression(SwitchExpressionTree node, Void p) {
             List<State> oldPendingYields = pendingYields;
             try {
                 pendingYields = new ArrayList<>();
-                handleGeneralizedSwitch(node, TreeShims.getExpressions(node).get(0), TreeShims.getCases(node));
+                handleGeneralizedSwitch(node, node.getExpression(), node.getCases());
                 if (pendingYields.isEmpty()) {
                     //should not happen (for valid source)
                     return State.POSSIBLE_NULL;
@@ -1285,6 +1313,11 @@ public class NPECheck {
         private void handleGeneralizedSwitch(Tree switchTree, ExpressionTree expression, List<? extends CaseTree> cases) {
             scan(expression, null);
 
+            Element selectorElement = info.getTrees().getElement(new TreePath(getCurrentPath(), expression));
+            VariableElement selectorVariable =
+                isVariableElement(selectorElement) && !hasDefiniteValue((VariableElement) selectorElement) ? (VariableElement) selectorElement
+                                                                                                           : null;
+
             Map<VariableElement, State> origVariable2State = new HashMap<>(variable2State);
 
             boolean exhaustive = false;
@@ -1292,14 +1325,29 @@ public class NPECheck {
             for (CaseTree ct : cases) {
                 mergeIntoVariable2State(origVariable2State);
 
-                if (ct.getExpression() == null) {
-                    exhaustive = true;
+                boolean hasNull = false;
+
+                for (CaseLabelTree clt : ct.getLabels()) {
+                    switch (clt.getKind()) {
+                        case DEFAULT_CASE_LABEL -> exhaustive = true;
+                        case CONSTANT_CASE_LABEL -> {
+                            if (((ConstantCaseLabelTree) clt).getConstantExpression().getKind() == Kind.NULL_LITERAL) {
+                                hasNull = true;
+                            }
+                        }
+                    }
+                }
+
+                if (selectorVariable != null) {
+                    variable2State.put(selectorVariable, hasNull ? State.NULL_HYPOTHETICAL : State.NOT_NULL_HYPOTHETICAL);
                 }
 
                 State caseResult = scan(ct, null);
 
-                if (TreeShims.isRuleCase(ct)) {
-                    pendingYields.add(caseResult);
+                if (ct.getCaseKind() == CaseKind.RULE) {
+                    if (ct.getBody() != null && ExpressionTree.class.isAssignableFrom(ct.getBody().getKind().asInterface())) {
+                        pendingYields.add(caseResult);
+                    }
                     breakTo(switchTree);
                 }
             }
@@ -1320,8 +1368,9 @@ public class NPECheck {
             return null;
         }
 
-        public State visitYield(Tree node, Void p) {
-            pendingYields.add(scan(TreeShims.getYieldValue(node), p));
+        @Override
+        public State visitYield(YieldTree node, Void p) {
+            pendingYields.add(scan(node.getValue(), p));
 
             Tree target = info.getTreeUtilities().getBreakContinueTargetTree(getCurrentPath());
             

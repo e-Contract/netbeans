@@ -19,6 +19,7 @@
 package org.netbeans.modules.maven.runjar;
 
 import java.awt.Dialog;
+import java.awt.GraphicsEnvironment;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.ArrayList;
@@ -28,7 +29,6 @@ import java.util.Properties;
 import javax.swing.JButton;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import org.apache.maven.artifact.Artifact;
 import org.apache.maven.model.Plugin;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.netbeans.api.java.project.JavaProjectConstants;
@@ -64,24 +64,32 @@ public class RunJarPrereqChecker implements PrerequisitesChecker {
     private static final String[] MAIN_CLASS_PROPERTIES = {"mainClass", "exec.mainClass", "project.mainClass", "project.mainclass"}; // NOI18N
 
     private String mainClass;
+    
+    private static String testedMainClass;
+    
+    /**
+     * For testing purposes only
+     * @param mainClass 
+     */
+    public static void setMainClass(String mainClass) {
+        testedMainClass = mainClass;
+    }
 
     @Override public boolean checkRunConfig(RunConfig config) {
         String actionName = config.getActionName();
-        for (Map.Entry<? extends String,? extends String> entry : config.getProperties().entrySet()) {
-            if ("exec.executable".equals(entry.getKey())) { //NOI18N
-                // check for "java" and replace it with absolute path to
-                // project j2seplaform's java.exe
-                if ("java".equals(entry.getValue())) { //NOI18N
-                    //TODO somehow use the config.getMavenProject() call rather than looking up the
-                    // ActiveJ2SEPlatformProvider from lookup. The loaded project can be different from the executed one.
-                    ActiveJ2SEPlatformProvider plat = config.getProject().getLookup().lookup(ActiveJ2SEPlatformProvider.class);
-                    assert plat != null;
-                    FileObject fo = plat.getJavaPlatform().findTool(entry.getValue());
-                    if (fo != null) {
-                        File fl = FileUtil.toFile(fo);
-                        config.setProperty("exec.executable", fl.getAbsolutePath()); //NOI18N
-                    }
-                }
+
+        // check for "java" and replace it with absolute path to
+        // project j2seplaform's java.exe
+        String tool = config.getProperties().get("exec.executable"); //NOI18N
+        if ("java".equals(tool)) { //NOI18N
+            //TODO somehow use the config.getMavenProject() call rather than looking up the
+            // ActiveJ2SEPlatformProvider from lookup. The loaded project can be different from the executed one.
+            ActiveJ2SEPlatformProvider plat = config.getProject().getLookup().lookup(ActiveJ2SEPlatformProvider.class);
+            assert plat != null;
+            FileObject fo = plat.getJavaPlatform().findTool(tool);
+            if (fo != null) {
+                File fl = FileUtil.toFile(fo);
+                config.setProperty("exec.executable", fl.getAbsolutePath()); //NOI18N
             }
         }
 
@@ -93,12 +101,23 @@ public class RunJarPrereqChecker implements PrerequisitesChecker {
                 if (entry.getValue().contains("${packageClassName}")) { //NOI18N
                     //show dialog to choose main class.
                     if (mc == null) {
-                        mc = eventuallyShowDialog(config.getProject(), actionName);
+                        if (mainClass != null) {
+                            mc = mainClass;
+                        } else if (testedMainClass != null) {
+                            mainClass = testedMainClass;
+                            mc = mainClass;
+                        } else if (!GraphicsEnvironment.isHeadless()) {
+                            mc = showMainClassDialog(config.getProject(), actionName);
+                            if (mc == null) {
+                                return false;
+                            }
+                        }
                     }
-                    if (mc == null) {
-                        return false;
+                    if (mc != null) {
+                        config.setProperty(entry.getKey(), entry.getValue().replace("${packageClassName}", mc)); // NOI18N
+                        // send a note to RunJarStartupArgs
+                        config.setProperty(MavenExecuteUtils.RUN_MAIN_CLASS, mc); // NOI18N
                     }
-                    config.setProperty(entry.getKey(), entry.getValue().replace("${packageClassName}", mc)); // NOI18N
                 }
             }
         }
@@ -161,10 +180,7 @@ public class RunJarPrereqChecker implements PrerequisitesChecker {
         "LBL_ChooseMainClass_Title=Select Main Class for Execution",
         "LBL_ChooseMainClass_OK=Select Main Class"
     })
-    private String eventuallyShowDialog(Project project, String actionName) {
-        if (mainClass != null) {
-            return mainClass;
-        }
+    private String showMainClassDialog(Project project, String actionName) {
         List<FileObject> roots = new ArrayList<FileObject>();
         Sources srcs = ProjectUtils.getSources(project);
         for (SourceGroup sourceGroup : srcs.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA)) {

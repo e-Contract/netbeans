@@ -6,8 +6,17 @@ namespace ExampleNamespace;
 use Some\Classes\{ClassA, ClassB, ClassC as C};
 
 class Example implements Iface1, Iface2, Iface3 {
-
+#[A1("param")]
 private ClassA|ClassB|null $unionType;
+
+private ClassA&ClassB $intersectionType;
+
+private string $propertyHook {
+    &get {
+        return $this->propertyHook;
+    }
+    set($value) => $this->propertyHook = $value;
+}
 
     public function ifExample ($a, $b) {
         if (convert($a) > $b) {
@@ -18,6 +27,10 @@ private ClassA|ClassB|null $unionType;
             $result = getText($this->property1, $this->property2) ;
         }
 	$result = $a < $b ? $a : $b;
+    }
+
+    public function coalescingOperatorExample(?string $a): string {
+        return $a ?? 'default value';
     }
 
 public function forExample() {
@@ -101,15 +114,41 @@ public function unionTypesExample(
     return null;
 }
 
+public function intersectionTypesExample(
+        ClassA&ClassB $object
+        ): ClassA&ClassB {
+    return $object;
+}
+
 public function nullsafeOperatorExample(object $object){
     $object?->nullsafe();
 }
 }
 
+enum EnumExample: string {
+
+    case FOO = 'F';
+    case BAR = 'B';
+
+    public function example(): string {
+        return match ($this) {
+            static::FOO => 'Foo',
+            static::BAR => 'Bar',
+        };
+    }
+}
+
+$anonymousFunc = function ($arg) use ($param):int {
+    return 1;
+};
+
 // Wrapping: Method Call Arguments must be set
 (new Example())->alignParamsExample('one',
         'two', 'three',
         'four', 'five');
+
+function namedArguments($a, $b) {}
+namedArguments(a:1, b:2);
 
 $shortName=10;
 $veryLooongName=20;
@@ -118,4 +157,10 @@ $data=[
 'very_looong_key'=>100,
 ];
 
-?>
+$match = match ($type) {
+    "condition" => 1,
+    "loooooong condition" => 2,
+    default => 0,
+};
+
+new (trim(' Example '))()->field;

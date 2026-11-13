@@ -20,6 +20,7 @@
 package org.netbeans.api.java.source;
 
 import com.sun.source.tree.NewClassTree;
+import com.sun.source.tree.VariableTree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
 import com.sun.tools.javac.model.JavacElements;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -53,7 +55,6 @@ import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.java.source.BootClassPathUtil;
 import org.netbeans.modules.java.source.ElementUtils;
 import org.netbeans.modules.java.source.TestUtil;
-import org.netbeans.modules.java.source.TreeShims;
 import org.netbeans.modules.java.source.usages.IndexUtil;
 import org.netbeans.spi.java.classpath.ClassPathProvider;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
@@ -432,11 +433,9 @@ public class ElementHandleTest extends NbTestCase {
             ElementKind.CLASS,
             ElementKind.INTERFACE,
             ElementKind.ENUM,
-            ElementKind.ANNOTATION_TYPE
+            ElementKind.ANNOTATION_TYPE,
+            ElementKind.RECORD
         }));
-        ElementKind recordKind = TreeShims.getRecordKind();
-        if (recordKind != null)
-            allowed.add(recordKind);
         for (ElementKind aek : allowed) {
             ElementHandle<TypeElement> eh = ElementHandle.createTypeElementHandle(aek, "org.me.Foo");    //NOI18N
             assertEquals(aek, eh.getKind());
@@ -677,6 +676,80 @@ public class ElementHandleTest extends NbTestCase {
             Elements elements = cc.getElements();
             TypeElement te = elements.getTypeElement("java.lang.String");
             ElementHandle.create(te).resolve(cc);
+        }, true);
+        SourceLevelQueryImpl.getDefault().setSourceLevel(jlObject, null);
+    }
+
+    public void testMethodParameter1() throws Exception {
+        try (PrintWriter out = new PrintWriter ( new OutputStreamWriter (data.getOutputStream()))) {
+            out.println("""
+                        public class Test {
+                            public Test(int cParam) {}
+                            public void test(int mParam) {
+                                FI fi = lParam -> {};
+                            }
+                            interface FI {
+                                public void test(int x) {}
+                            }
+                        }
+                        """);
+        }
+        final JavaSource js = JavaSource.create(ClasspathInfo.create(ClassPathProviderImpl.getDefault().findClassPath(data,ClassPath.BOOT), ClassPathProviderImpl.getDefault().findClassPath(data, ClassPath.COMPILE), null), data);
+        assertNotNull(js);
+        AtomicInteger testCount = new AtomicInteger();
+
+        js.runUserActionTask(new Task<CompilationController>() {
+            public void run(CompilationController parameter) throws Exception {
+                parameter.toPhase(JavaSource.Phase.RESOLVED);
+                new TreePathScanner<Void, Void>() {
+                    @Override
+                    public Void visitVariable(VariableTree node, Void p) {
+                        if (node.getName().toString().endsWith("Param")) {
+                            Element el = parameter.getTrees().getElement(getCurrentPath());
+                            if (el.getSimpleName().contentEquals("lParam")) {
+                                try {
+                                    ElementHandle.create(el);
+                                    fail("Expected exception didn't happen!");
+                                } catch (IllegalArgumentException ex) {
+                                    //OK
+                                }
+                            } else {
+                                assertEquals(el, ElementHandle.create(el).resolve(parameter));
+                            }
+                            testCount.incrementAndGet();
+                        }
+                        return super.visitVariable(node, p);
+                    }
+                }.scan(parameter.getCompilationUnit(), null);
+            }
+        }, true);
+
+        assertEquals(3, testCount.get());
+    }
+
+    public void testMethodParameter2() throws Exception {
+        ClassPath systemClasses = BootClassPathUtil.getModuleBootPath();
+        ClassPath bcp = BootClassPathUtil.getBootClassPath();
+        FileObject jlObject = bcp.findResource("java/lang/String.class");
+        assertNotNull(jlObject);
+        ClasspathInfo cpInfo = new ClasspathInfo.Builder(bcp)
+                                                .setModuleBootPath(systemClasses)
+                                                .build();
+        JavaSource js = JavaSource.create(cpInfo, jlObject);
+        assertNotNull(js);
+        SourceLevelQueryImpl.getDefault().setSourceLevel(jlObject, "11");
+        js.runUserActionTask(cc -> {
+            cc.toPhase(JavaSource.Phase.ELEMENTS_RESOLVED);
+            TypeElement tl = cc.getTopLevelElements().get(0);
+            for (Element el : tl.getEnclosedElements()) {
+                if (el.getKind() != ElementKind.METHOD &&
+                    el.getKind() != ElementKind.CONSTRUCTOR) {
+                    continue;
+                }
+                for (VariableElement parameter : ((ExecutableElement) el).getParameters()) {
+                    assertEquals(parameter, ElementHandle.create(parameter).resolve(cc));
+                }
+            }
         }, true);
         SourceLevelQueryImpl.getDefault().setSourceLevel(jlObject, null);
     }

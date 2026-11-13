@@ -19,6 +19,9 @@
 
 package org.netbeans.modules.java.hints.encapsulation;
 
+import com.sun.source.tree.ExpressionTree;
+import com.sun.source.tree.LiteralTree;
+import com.sun.source.tree.NewArrayTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.tree.VariableTree;
@@ -34,7 +37,6 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
@@ -88,7 +90,18 @@ public class ReturnEncapsulation {
             "java.util.Collections.<$T$>unmodifiableSortedSet($any)",
             "java.util.Collections.<$T$>unmodifiableMap($any)",
             "java.util.Collections.<$T$>unmodifiableSortedMap($any)",
-            "java.util.Arrays.<$T$>asList($any$)"
+            "java.util.Collections.<$T$>unmodifiableNavigableMap($any)",
+            "java.util.Collections.<$T$>unmodifiableSequencedCollection($any)",
+            "java.util.Collections.<$T$>unmodifiableSequencedSet($any)",
+            "java.util.Collections.<$T$>unmodifiableSequencedMap($any)",
+            "java.util.Arrays.<$T$>asList($any$)",
+            "java.util.List.<$T$>of($any$)",
+            "java.util.List.<$T$>copyOf($any$)",
+            "java.util.Set.<$T$>of($any$)",
+            "java.util.Set.<$T$>copyOf($any$)",
+            "java.util.Map.<$T$>of($any$)",
+            "java.util.Map.<$T$>copyOf($any$)",
+            "java.util.Map.<$T$>ofEntries($any$)"
     );
 
     @Hint(displayName = "#DN_org.netbeans.modules.java.hints.encapsulation.ReturnEncapsulation.collection", description = "#DESC_org.netbeans.modules.java.hints.encapsulation.ReturnEncapsulation.collection", category="encapsulation",suppressWarnings="ReturnOfCollectionOrArrayField", enabled=false) //NOI18N
@@ -204,10 +217,27 @@ public class ReturnEncapsulation {
             TreePath decl = ctx.getInfo().getTrees().getPath(exprElement);
 
             if (decl != null && decl.getLeaf().getKind() == Kind.VARIABLE && ((VariableTree) decl.getLeaf()).getInitializer() != null) {
-                TreePath init = new TreePath(decl, ((VariableTree) decl.getLeaf()).getInitializer());
+                ExpressionTree etInit = ((VariableTree) decl.getLeaf()).getInitializer();
+                TreePath init = new TreePath(decl, etInit);
 
                 for (String p : UNMODIFIABLE) {
                     if (MatcherUtilities.matches(ctx, init, p)) {
+                        return null;
+                    }
+                }
+                // check arrays with zero length or empty initializer i.e new int[0] or new int[] {}
+                if (etInit.getKind() == Tree.Kind.NEW_ARRAY) {
+                    NewArrayTree newArray = (NewArrayTree) etInit;
+                    List<? extends ExpressionTree> dimensions = newArray.getDimensions();
+                    if (dimensions != null &&
+                        !dimensions.isEmpty() &&
+                        dimensions.getFirst().getKind() == Tree.Kind.INT_LITERAL &&
+                        Integer.valueOf(0).equals(((LiteralTree)dimensions.getFirst()).getValue())) {
+                        return null;
+                    }
+                    if (newArray.getInitializers() != null &&
+                        newArray.getInitializers().isEmpty() &&
+                        (dimensions == null || dimensions.isEmpty())) {
                         return null;
                     }
                 }
@@ -217,7 +247,7 @@ public class ReturnEncapsulation {
         if (enclMethod == null || enclMethod.getEnclosingElement() != exprElement.getEnclosingElement()) {
             return null;
         }
-        List<Fix> fixes = new ArrayList<Fix>(providers.length + 1);
+        List<Fix> fixes = new ArrayList<>(providers.length + 1);
         for (int i=0; i<providers.length; i++) {
             Fix f = providers[i].fixFor(ctx,(ExecutableElement) enclMethod,exprPath);
             if (f != null) {
@@ -229,7 +259,7 @@ public class ReturnEncapsulation {
             fixes.toArray(new Fix[0]));
     }
 
-    private static final TreePath findEnclosingMethod(TreePath tp) {
+    private static TreePath findEnclosingMethod(TreePath tp) {
         while (tp != null && tp.getLeaf().getKind() != Tree.Kind.COMPILATION_UNIT) {
             if (tp.getLeaf().getKind() == Tree.Kind.METHOD) {
                 return tp;
@@ -248,13 +278,18 @@ public class ReturnEncapsulation {
         private static final Map<String, String> TO_UNMODIFIABLE;
 
         static {
-            TO_UNMODIFIABLE = new LinkedHashMap<String, String>();
+            TO_UNMODIFIABLE = new LinkedHashMap<>();
             TO_UNMODIFIABLE.put("java.util.SortedMap", "unmodifiableSortedMap");
             TO_UNMODIFIABLE.put("java.util.SortedSet", "unmodifiableSortedSet");
             TO_UNMODIFIABLE.put("java.util.Map", "unmodifiableMap");
             TO_UNMODIFIABLE.put("java.util.Set", "unmodifiableSet");
             TO_UNMODIFIABLE.put("java.util.List", "unmodifiableList");
             TO_UNMODIFIABLE.put("java.util.Collection", "unmodifiableCollection");
+            TO_UNMODIFIABLE.put("java.util.NavigableMap", "unmodifiableNavigableMap");
+            TO_UNMODIFIABLE.put("java.util.NavigableSet", "unmodifiableNavigableSet");
+            TO_UNMODIFIABLE.put("java.util.SequencedCollection", "unmodifiableSequencedCollection");
+            TO_UNMODIFIABLE.put("java.util.SequencedMap", "unmodifiableSequencedMap");
+            TO_UNMODIFIABLE.put("java.util.SequencedSet", "unmodifiableSequencedSet");
         }
 
         private FixProvider() {

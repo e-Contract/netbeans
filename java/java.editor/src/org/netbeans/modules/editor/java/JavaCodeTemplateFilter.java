@@ -19,19 +19,20 @@
 
 package org.netbeans.modules.editor.java;
 
+import com.sun.source.tree.CaseLabelTree;
 import com.sun.source.tree.Tree;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
 import com.sun.source.tree.CaseTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
+import java.util.Set;
 import org.netbeans.api.java.lexer.JavaTokenId;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.JavaSource.Phase;
@@ -65,16 +66,14 @@ public class JavaCodeTemplateFilter implements CodeTemplateFilter {
     private Tree.Kind treeKindCtx = null;
     private String stringCtx = null;
     
-    private JavaCodeTemplateFilter(JTextComponent component, int offset) {
-        if (Utilities.isJavaContext(component, offset, true)) {
-            final int startOffset = offset;
-            final int endOffset = component.getSelectionStart() == offset ? component.getSelectionEnd() : -1;
-            final Source source = Source.create(component.getDocument());
+    private JavaCodeTemplateFilter(Document doc, int startOffset, int endOffset) {
+        if (Utilities.isJavaContext(doc, startOffset, true)) {
+            final Source source = Source.create(doc);
             if (source != null) {
                 final AtomicBoolean cancel = new AtomicBoolean();
                 BaseProgressUtils.runOffEventDispatchThread(() -> {
                     try {
-                        ParserManager.parse(Collections.singleton(source), new UserTask() {
+                        ParserManager.parse(Set.of(source), new UserTask() {
                             @Override
                             public void run(ResultIterator resultIterator) throws Exception {
                                 if (cancel.get()) {
@@ -99,7 +98,7 @@ public class JavaCodeTemplateFilter implements CodeTemplateFilter {
                                                 String selectedText = controller.getText().substring(so, eo).trim();
                                                 SourcePositions[] sp = new SourcePositions[1];
                                                 ExpressionTree expr = selectedText.length() > 0 ? tu.parseExpression(selectedText, sp) : null;
-                                                if (expr != null && expr.getKind() != Tree.Kind.IDENTIFIER && !Utilities.containErrors(expr) && sp[0].getEndPosition(null, expr) >= selectedText.length()) {
+                                                if (expr != null && expr.getKind() != Tree.Kind.IDENTIFIER && !Utilities.containErrors(expr) && sp[0].getEndPosition(expr) >= selectedText.length()) {
                                                     stringCtx = EXPRESSION;
                                                 }
                                             }
@@ -113,16 +112,27 @@ public class JavaCodeTemplateFilter implements CodeTemplateFilter {
                                     }
                                     treeKindCtx = tree.getKind();
                                     switch (treeKindCtx) {
-                                        case CASE:
-                                            if (so < controller.getTrees().getSourcePositions().getEndPosition(controller.getCompilationUnit(), ((CaseTree)tree).getExpression())) {
+                                        case CASE: {
+                                            if (((CaseTree)tree).getCaseKind() == CaseTree.CaseKind.RULE) {
                                                 treeKindCtx = null;
+                                            } else {
+                                                SourcePositions sp = controller.getTrees().getSourcePositions();
+                                                List<? extends CaseLabelTree> labels = ((CaseTree)tree).getLabels();
+                                                int startPos = labels.isEmpty() ? (int) sp.getEndPosition(labels.get(labels.size() - 1))
+                                                        : (int)sp.getStartPosition(tree);
+                                                String headerText = controller.getText().substring(startPos, so);
+                                                int idx = headerText.indexOf(':');
+                                                if (idx < 0) {
+                                                    treeKindCtx = null;
+                                                }
                                             }
                                             break;
-                                        case CLASS:
+                                        }
+                                        case CLASS: {
                                             SourcePositions sp = controller.getTrees().getSourcePositions();
-                                            int startPos = (int)sp.getEndPosition(controller.getCompilationUnit(), ((ClassTree)tree).getModifiers());
+                                            int startPos = (int)sp.getEndPosition(((ClassTree)tree).getModifiers());
                                             if (startPos <= 0) {
-                                                startPos = (int)sp.getStartPosition(controller.getCompilationUnit(), tree);
+                                                startPos = (int)sp.getStartPosition(tree);
                                             }
                                             String headerText = controller.getText().substring(startPos, so);
                                             int idx = headerText.indexOf('{'); //NOI18N
@@ -131,6 +141,7 @@ public class JavaCodeTemplateFilter implements CodeTemplateFilter {
                                                 stringCtx = CLASS_HEADER;
                                             }
                                             break;
+                                        }
                                         case FOR_LOOP:
                                         case ENHANCED_FOR_LOOP:
                                             if (!isRightParenthesisOfLoopPresent(controller, so)) {
@@ -193,22 +204,12 @@ public class JavaCodeTemplateFilter implements CodeTemplateFilter {
         if (treeKindCtx == null && stringCtx == null) {
             return false;
         }
-        EnumSet<Tree.Kind> treeKindContexts = EnumSet.noneOf(Tree.Kind.class);
-        HashSet stringContexts = new HashSet();
-        getTemplateContexts(template, treeKindContexts, stringContexts);
-        return treeKindContexts.isEmpty() && stringContexts.isEmpty() && treeKindCtx != Tree.Kind.STRING_LITERAL || treeKindContexts.contains(treeKindCtx) || stringContexts.contains(stringCtx);
-    }
-    
-    private void getTemplateContexts(CodeTemplate template, EnumSet<Tree.Kind> treeKindContexts, HashSet<String> stringContexts) {
         List<String> contexts = template.getContexts();
-        if (contexts != null) {
-            for(String context : contexts) {
-                try {
-                    treeKindContexts.add(Tree.Kind.valueOf(context));
-                } catch (IllegalArgumentException iae) {
-                    stringContexts.add(context);
-                }
-            }
+        if (contexts == null || contexts.isEmpty()) {
+            return treeKindCtx != Tree.Kind.STRING_LITERAL;
+        } else {
+            return (treeKindCtx != null && contexts.contains(treeKindCtx.name()))
+                || (stringCtx != null && contexts.contains(stringCtx));
         }
     }
 
@@ -216,7 +217,12 @@ public class JavaCodeTemplateFilter implements CodeTemplateFilter {
         
         @Override
         public CodeTemplateFilter createFilter(JTextComponent component, int offset) {
-            return new JavaCodeTemplateFilter(component, offset);
+            return createFilter(component.getDocument(), offset, component.getSelectionStart() == offset ? component.getSelectionEnd() : -1);
+        }
+
+        @Override
+        public CodeTemplateFilter createFilter(Document doc, int startOffset, int endOffset) {
+            return new JavaCodeTemplateFilter(doc, startOffset, endOffset);
         }
 
         @Override

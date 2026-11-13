@@ -22,20 +22,24 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lsp4j.debug.Breakpoint;
-import org.eclipse.lsp4j.debug.BreakpointEventArguments;
 import org.eclipse.lsp4j.debug.SetBreakpointsArguments;
 import org.eclipse.lsp4j.debug.SetBreakpointsResponse;
 import org.eclipse.lsp4j.debug.SetExceptionBreakpointsArguments;
+import org.eclipse.lsp4j.debug.SetExceptionBreakpointsResponse;
 import org.eclipse.lsp4j.debug.Source;
 import org.eclipse.lsp4j.debug.SourceBreakpoint;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
+import org.netbeans.modules.java.lsp.server.URITranslator;
+import org.netbeans.modules.java.lsp.server.Utils;
 import org.netbeans.modules.java.lsp.server.debugging.DebugAdapterContext;
 import org.netbeans.modules.java.lsp.server.debugging.utils.ErrorUtilities;
 
@@ -75,10 +79,11 @@ public final class NbBreakpointsRequestHandler {
                 ResponseErrorCode.InvalidParams);
             return resultFuture;
         }
+        sourcePath = URITranslator.getDefault().uriFromLSP(sourcePath);
         List<Breakpoint> res = new ArrayList<>();
         NbBreakpoint[] toAdds = this.convertClientBreakpointsToDebugger(source, sourcePath, arguments.getBreakpoints(), context);
         // Decode the URI if it comes encoded:
-        NbBreakpoint[] added = context.getBreakpointManager().setBreakpoints(decodeURI(sourcePath), toAdds, arguments.getSourceModified());
+        NbBreakpoint[] added = context.getBreakpointManager().setBreakpoints(decodeURI(sourcePath), toAdds, Utils.wrappedBoolean2Boolean(arguments.getSourceModified(), false));
         for (int i = 0; i < arguments.getBreakpoints().length; i++) {
             // For newly added breakpoint, should install it to debuggee first.
             if (toAdds[i] == added[i]) {
@@ -101,7 +106,7 @@ public final class NbBreakpointsRequestHandler {
             res.add(added[i].convertDebuggerBreakpointToClient());
         }
         SetBreakpointsResponse response = new SetBreakpointsResponse();
-        response.setBreakpoints(res.toArray(new Breakpoint[res.size()]));
+        response.setBreakpoints(res.toArray(new Breakpoint[0]));
         resultFuture.complete(response);
         return resultFuture;
     }
@@ -114,8 +119,8 @@ public final class NbBreakpointsRequestHandler {
         }
     }
 
-    public CompletableFuture<Void> setExceptionBreakpoints(SetExceptionBreakpointsArguments arguments, DebugAdapterContext context) {
-        CompletableFuture<Void> resultFuture = new CompletableFuture<>();
+    public CompletableFuture<SetExceptionBreakpointsResponse> setExceptionBreakpoints(SetExceptionBreakpointsArguments arguments, DebugAdapterContext context) {
+        CompletableFuture<SetExceptionBreakpointsResponse> resultFuture = new CompletableFuture<>();
         if (context.getDebugSession() == null) {
             ErrorUtilities.completeExceptionally(resultFuture, "Empty debug session.", ResponseErrorCode.InvalidParams);
             return resultFuture;
@@ -124,25 +129,40 @@ public final class NbBreakpointsRequestHandler {
         boolean notifyCaught = ArrayUtils.contains(filters, CAUGHT_EXCEPTION_FILTER_NAME);
         boolean notifyUncaught = ArrayUtils.contains(filters, UNCAUGHT_EXCEPTION_FILTER_NAME);
         context.getBreakpointManager().setExceptionBreakpoints(notifyCaught, notifyUncaught);
-        return CompletableFuture.completedFuture(null);
+        SetExceptionBreakpointsResponse response = new SetExceptionBreakpointsResponse();
+        // TODO: response.setBreakpoints(...);
+        return CompletableFuture.completedFuture(response);
     }
 
     private NbBreakpoint[] convertClientBreakpointsToDebugger(Source source, String sourceFile, SourceBreakpoint[] sourceBreakpoints, DebugAdapterContext context) {
+        Set<Integer> linesWithSpecificColumns = new HashSet<>();
         int n = sourceBreakpoints.length;
         int[] lines = new int[n];
+        Integer[] columns = new Integer[n];
         for (int i = 0; i < n; i++) {
             lines[i] = context.getDebuggerLine(sourceBreakpoints[i].getLine());
+            columns[i] = sourceBreakpoints[i].getColumn() != null ? context.getDebuggerColumn(sourceBreakpoints[i].getColumn()) : null;
+            if (sourceBreakpoints[i].getColumn() != null) {
+                linesWithSpecificColumns.add(sourceBreakpoints[i].getLine());
+            }
         }
-        NbBreakpoint[] breakpoints = new NbBreakpoint[n];
+        List<NbBreakpoint> breakpoints = new ArrayList<>();
         for (int i = 0; i < n; i++) {
+            String condition = sourceBreakpoints[i].getCondition();
+            if (linesWithSpecificColumns.contains(sourceBreakpoints[i].getLine()) &&
+                sourceBreakpoints[i].getColumn() == null) {
+                //if there's a breakpoint on a specific column, ignore the "whole line" breakpoint:
+                condition = "false";
+            }
+
             int hitCount = 0;
             try {
                 hitCount = Integer.parseInt(sourceBreakpoints[i].getHitCondition());
             } catch (NumberFormatException e) {
                 hitCount = 0; // If hitCount is not a number, ignore the hitCount.
             }
-            breakpoints[i] = new NbBreakpoint(source, sourceFile, lines[i], hitCount, sourceBreakpoints[i].getCondition(), sourceBreakpoints[i].getLogMessage(), context);
+            breakpoints.add(new NbBreakpoint(source, sourceFile, lines[i], columns[i], hitCount, condition, sourceBreakpoints[i].getLogMessage(), context));
         }
-        return breakpoints;
+        return breakpoints.toArray(NbBreakpoint[]::new);
     }
 }

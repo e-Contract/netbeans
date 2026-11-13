@@ -20,10 +20,11 @@
 package org.netbeans.modules.gradle.execute;
 
 import org.netbeans.modules.gradle.api.execute.GradleCommandLine;
-import javax.swing.text.Document;
 import javax.swing.text.EditorKit;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.gradle.actions.CustomActionRegistrationSupport;
+import org.netbeans.modules.gradle.api.execute.GradleExecConfiguration;
+import org.netbeans.modules.gradle.customizer.BuildActionsCustomizer;
 import org.openide.text.CloneableEditorSupport;
 
 /**
@@ -33,6 +34,8 @@ import org.openide.text.CloneableEditorSupport;
 public class GradleExecutorOptionsPanel extends javax.swing.JPanel {
 
     final Project project;
+    
+    private GradleExecConfiguration execConfig;
     
     public GradleExecutorOptionsPanel() {
         this(null);
@@ -44,10 +47,10 @@ public class GradleExecutorOptionsPanel extends javax.swing.JPanel {
     public GradleExecutorOptionsPanel(Project project) {
         this.project = project;
         initComponents();
-        EditorKit kit = CloneableEditorSupport.getEditorKit(GradleCliEditorKit.MIME_TYPE);
+        EditorKit kit = CloneableEditorSupport.getEditorKit("text/x-gradle-cli"); //NOI18N
         epCLI.setEditorKit(kit);
         if (project != null) {
-            epCLI.getDocument().putProperty(Document.StreamDescriptionProperty, project);
+            epCLI.getDocument().putProperty(BuildActionsCustomizer.GRADLE_PROJECT_PROPERTY, project);
         } else {
             tfRememberAs.setEnabled(false);
             lbRememberAs.setEnabled(false);
@@ -55,7 +58,8 @@ public class GradleExecutorOptionsPanel extends javax.swing.JPanel {
         epCLI.requestFocus();
     }
 
-    public void setCommandLine(GradleCommandLine cmd) {
+    public void setCommandLine(GradleCommandLine cmd, GradleExecConfiguration cfg) {
+        this.execConfig = cfg;
         GradleCommandLine text = new GradleCommandLine(cmd);
         execOptions.setCommandLine(text);
         text.remove(ExecutionOptionsPanel.getCLIMask());
@@ -66,8 +70,9 @@ public class GradleExecutorOptionsPanel extends javax.swing.JPanel {
         String txt = tfRememberAs.getText().trim();
         if (!txt.isEmpty() && (project != null)) {
             CustomActionRegistrationSupport support = new CustomActionRegistrationSupport(project);
+            support.setActiveConfiguration(execConfig);
             support.registerCustomAction(txt, String.join(" ", getCommandLine().getFullCommandLine()));
-            support.save();
+            support.saveAndReportErrors();
             return true;
         }
         return false;
@@ -120,9 +125,7 @@ public class GradleExecutorOptionsPanel extends javax.swing.JPanel {
             .addGroup(jPanel1Layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
-                        .addGap(0, 0, Short.MAX_VALUE)
-                        .addComponent(execOptions, javax.swing.GroupLayout.PREFERRED_SIZE, 707, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(execOptions, javax.swing.GroupLayout.DEFAULT_SIZE, 682, Short.MAX_VALUE)
                     .addComponent(jScrollPane3))
                 .addContainerGap())
         );
@@ -130,7 +133,7 @@ public class GradleExecutorOptionsPanel extends javax.swing.JPanel {
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 118, Short.MAX_VALUE)
+                .addComponent(jScrollPane3, javax.swing.GroupLayout.DEFAULT_SIZE, 87, Short.MAX_VALUE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(execOptions, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addContainerGap())
@@ -156,13 +159,13 @@ public class GradleExecutorOptionsPanel extends javax.swing.JPanel {
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(lbTasks, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(jTabbedPane1, javax.swing.GroupLayout.Alignment.TRAILING)
-                    .addGroup(layout.createSequentialGroup()
+                    .addComponent(jTabbedPane1, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
                         .addGap(425, 425, 425)
                         .addComponent(lbRememberAs)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(tfRememberAs, javax.swing.GroupLayout.PREFERRED_SIZE, 178, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addGap(0, 0, Short.MAX_VALUE)))
+                        .addGap(0, 0, 0)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -171,7 +174,7 @@ public class GradleExecutorOptionsPanel extends javax.swing.JPanel {
                 .addGap(12, 12, 12)
                 .addComponent(lbTasks)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jTabbedPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 253, Short.MAX_VALUE)
+                .addComponent(jTabbedPane1)
                 .addGap(18, 18, 18)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(tfRememberAs, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)

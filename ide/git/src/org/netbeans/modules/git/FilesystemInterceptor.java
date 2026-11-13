@@ -348,8 +348,12 @@ class FilesystemInterceptor extends VCSInterceptor {
             FileUtils.copyFile(from, to);
         }
 
-        if (root == null || cache.getStatus(to).containsStatus(Status.NOTVERSIONED_EXCLUDED)) {
-            // target lies under ignored folder, do not add it
+        if (root == null
+                // target lies under ignored folder, do not add it
+                || cache.getStatus(to).containsStatus(Status.NOTVERSIONED_EXCLUDED)
+                // user choose that new files shall be excluded from commit by
+                // default, so follow that decision
+                || GitModuleConfig.getDefault().getExludeNewFiles()) {
             return;
         }
         GitClient client = null;
@@ -864,7 +868,7 @@ class FilesystemInterceptor extends VCSInterceptor {
                     repositories = new HashSet<>(refreshedRepositories);
                     refreshedRepositories.clear();
                 }
-                GitUtils.headChanged(repositories.toArray(new File[repositories.size()]));
+                GitUtils.headChanged(repositories.toArray(new File[0]));
             }
         });
         private final GitRepositories gitRepositories = GitRepositories.getInstance();
@@ -1172,30 +1176,9 @@ class FilesystemInterceptor extends VCSInterceptor {
             if (gitFolder.isFile()) {
                 ts = gitFolder.lastModified();
                 if (mapping == null || mapping.ts < ts) {
-                    BufferedReader br = null;
-                    try {
-                        br = new BufferedReader(new FileReader(gitFolder));
-                        for (String line = br.readLine(); line != null; line = br.readLine()) {
-                            line = line.trim();
-                            if (line.startsWith("gitdir:")) { //NOI18N
-                                line = line.substring(7).trim();
-                                File tmp = new File(line);
-                                if (!tmp.isAbsolute()) {
-                                    tmp = new File(gitFolder, line).getCanonicalFile();
-                                }
-                                metadataFolder = tmp;
-                                break;
-                            }
-                        }
-                    } catch (IOException ex) {
-                        //
-                    } finally {
-                        if (br != null) {
-                            try {
-                                br.close();
-                            } catch (IOException ex) {
-                            }
-                        }
+                    File dirOrNull = GitUtils.findMetafolder(gitFolder);
+                    if (dirOrNull != null) {
+                        metadataFolder = dirOrNull;
                     }
                 }
             }

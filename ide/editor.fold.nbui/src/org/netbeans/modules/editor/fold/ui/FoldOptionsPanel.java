@@ -24,12 +24,10 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.PreferenceChangeListener;
 import java.util.prefs.Preferences;
@@ -89,6 +87,7 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
         langSelect.addActionListener(this);
         contentPreview.addActionListener(this);
         foldedSummary.addActionListener(this);
+        showTooltip.addActionListener(this);
         
         // preferences should be set as a reaction to index selection
     }
@@ -144,6 +143,10 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
         currentPreferences.putBoolean(FoldUtilitiesImpl.PREF_CONTENT_SUMMARY, foldedSummary.isSelected());
     }
     
+    private void tooltipChanged() {
+        currentPreferences.putBoolean(FoldUtilitiesImpl.PREF_CONTENT_TOOLTIP, showTooltip.isSelected());
+    }
+    
     @Override
     public void actionPerformed(ActionEvent e) {
         Object o = e.getSource();
@@ -156,6 +159,8 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
             previewChanged();
         } else if (o == foldedSummary) {
             summaryChanged();
+        } else if (o == showTooltip) {
+            tooltipChanged();
         }
     }
 
@@ -172,16 +177,20 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
                 enableFolds.setSelected(enabled);
                 contentPreview.setEnabled(enabled);
                 foldedSummary.setEnabled(enabled);
+                showTooltip.setEnabled(enabled);
                 useDefaults.setEnabled(enabled);
             } 
-            if (k == null || FoldUtilitiesImpl.PREF_CONTENT_PREVIEW.equals(FoldUtilitiesImpl.PREF_CONTENT_PREVIEW)) {
+            if (k == null || k.equals(FoldUtilitiesImpl.PREF_CONTENT_PREVIEW)) {
                 contentPreview.setSelected(currentPreferences.getBoolean(FoldUtilitiesImpl.PREF_CONTENT_PREVIEW, true));
             }
-            if (k == null || FoldUtilitiesImpl.PREF_CONTENT_SUMMARY.equals(FoldUtilitiesImpl.PREF_CONTENT_SUMMARY)) {
+            if (k == null || k.equals(FoldUtilitiesImpl.PREF_CONTENT_SUMMARY)) {
                 foldedSummary.setSelected(currentPreferences.getBoolean(FoldUtilitiesImpl.PREF_CONTENT_SUMMARY, true));
+            }
+            if (k == null || k.equals(FoldUtilitiesImpl.PREF_CONTENT_TOOLTIP)) {
+                showTooltip.setSelected(currentPreferences.getBoolean(FoldUtilitiesImpl.PREF_CONTENT_TOOLTIP, true));
             } 
             // must not replicate defaults over current settings if unspecified key arrives.
-            if (k != null && FoldUtilitiesImpl.PREF_OVERRIDE_DEFAULTS.equals(k)) {
+            if (FoldUtilitiesImpl.PREF_OVERRIDE_DEFAULTS.equals(k)) {
                 boolean b = parentPrefs == null || !currentPreferences.getBoolean(FoldUtilitiesImpl.PREF_OVERRIDE_DEFAULTS, true);
                 if (parentPrefs != null) {
                     if (b) {
@@ -189,15 +198,20 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
                                 parentPrefs.getBoolean(FoldUtilitiesImpl.PREF_CONTENT_PREVIEW, true));
                         currentPreferences.putBoolean(FoldUtilitiesImpl.PREF_CONTENT_SUMMARY, 
                                 parentPrefs.getBoolean(FoldUtilitiesImpl.PREF_CONTENT_SUMMARY, true));
+                        currentPreferences.putBoolean(FoldUtilitiesImpl.PREF_CONTENT_TOOLTIP, 
+                                parentPrefs.getBoolean(FoldUtilitiesImpl.PREF_CONTENT_TOOLTIP, true));
                     } else {
                         currentPreferences.remove(FoldUtilitiesImpl.PREF_CONTENT_PREVIEW);
                         currentPreferences.remove(FoldUtilitiesImpl.PREF_CONTENT_SUMMARY);
+                        currentPreferences.remove(FoldUtilitiesImpl.PREF_CONTENT_TOOLTIP);
                     }
                 }
                 contentPreview.setEnabled(b);
                 foldedSummary.setEnabled(b);
+                showTooltip.setEnabled(b);
                 contentPreview.setSelected(currentPreferences.getBoolean(FoldUtilitiesImpl.PREF_CONTENT_PREVIEW, true));
                 foldedSummary.setSelected(currentPreferences.getBoolean(FoldUtilitiesImpl.PREF_CONTENT_SUMMARY, true));
+                showTooltip.setSelected(currentPreferences.getBoolean(FoldUtilitiesImpl.PREF_CONTENT_TOOLTIP, true));
             }
         } finally {
             ignoreEnableTrigger = false;
@@ -206,8 +220,7 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
     
     boolean isChanged() {
         boolean isChanged= false;
-        for(String mime : panels.keySet()) {
-            JComponent panel = panels.get(mime);
+        for(JComponent panel : panels.values()) {
             if(panel instanceof DefaultFoldingOptions) {
                 isChanged |= ((DefaultFoldingOptions)panel).isChanged();
             }
@@ -245,10 +258,10 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
                 s, EditorSettings.getDefault().getLanguageName(s)
             });
         }
-        Collections.sort(langMimes, LANG_COMPARATOR);
+        langMimes.sort(LANG_COMPARATOR);
         languageMimeTypes = langMimes;
         int idx = langSelect.getSelectedIndex();
-        langSelect.setModel(new DefaultComboBoxModel(languageMimeTypes.toArray(new Object[languageMimeTypes.size()])));
+        langSelect.setModel(new DefaultComboBoxModel(languageMimeTypes.toArray(new Object[0])));
         langSelect.setSelectedIndex(idx >= 0 && idx < langSelect.getItemCount() ? idx : 0);
     }
     
@@ -300,6 +313,7 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
         jPanel1 = new javax.swing.JPanel();
         contentPreview = new javax.swing.JCheckBox();
         foldedSummary = new javax.swing.JCheckBox();
+        showTooltip = new javax.swing.JCheckBox();
         useDefaults = new javax.swing.JCheckBox();
 
         org.openide.awt.Mnemonics.setLocalizedText(langLabel, org.openide.util.NbBundle.getMessage(FoldOptionsPanel.class, "FoldOptionsPanel.langLabel.text")); // NOI18N
@@ -319,6 +333,8 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
 
         org.openide.awt.Mnemonics.setLocalizedText(foldedSummary, org.openide.util.NbBundle.getMessage(FoldOptionsPanel.class, "FoldOptionsPanel.foldedSummary.text")); // NOI18N
 
+        org.openide.awt.Mnemonics.setLocalizedText(showTooltip, org.openide.util.NbBundle.getMessage(FoldOptionsPanel.class, "FoldOptionsPanel.showTooltip.text")); // NOI18N
+
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
         jPanel1Layout.setHorizontalGroup(
@@ -327,7 +343,8 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
                 .addContainerGap()
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(contentPreview)
-                    .addComponent(foldedSummary))
+                    .addComponent(foldedSummary)
+                    .addComponent(showTooltip))
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
         jPanel1Layout.setVerticalGroup(
@@ -337,7 +354,9 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
                 .addComponent(contentPreview)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(foldedSummary)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(showTooltip)
+                .addContainerGap())
         );
 
         org.openide.awt.Mnemonics.setLocalizedText(useDefaults, org.openide.util.NbBundle.getMessage(FoldOptionsPanel.class, "FoldOptionsPanel.useDefaults.text")); // NOI18N
@@ -379,7 +398,7 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addComponent(useDefaults)
                 .addGap(12, 12, 12)
-                .addComponent(content, javax.swing.GroupLayout.DEFAULT_SIZE, 25, Short.MAX_VALUE)
+                .addComponent(content, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addGap(18, 18, 18)
                 .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addContainerGap())
@@ -411,6 +430,7 @@ final class FoldOptionsPanel extends javax.swing.JPanel implements ActionListene
     private javax.swing.JPanel jPanel1;
     private javax.swing.JLabel langLabel;
     private javax.swing.JComboBox langSelect;
+    private javax.swing.JCheckBox showTooltip;
     private javax.swing.JCheckBox useDefaults;
     // End of variables declaration//GEN-END:variables
 }

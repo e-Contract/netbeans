@@ -39,11 +39,19 @@ import org.openide.filesystems.FileObject;
 public class TestChecker implements PrerequisitesChecker {
 
     /**
-     * Skip test execution.
+     * Skip (unit) test execution.
      * Do not use maven.test.skip as that skips also compilation; see #189466 for background.
-     * http://maven.apache.org/plugins/maven-surefire-plugin/examples/skipping-test.html
+     * https://maven.apache.org/surefire/maven-surefire-plugin/examples/skipping-tests.html
      */
     public static final String PROP_SKIP_TEST = "skipTests"; // NOI18N
+    /**
+     * Skip integration test execution.
+     * Since surefire 3.6.0, skipTests only skips unit tests;
+     * integration tests must be skipped with the "skipITs" property
+     * https://maven.apache.org/surefire/maven-failsafe-plugin/integration-test-mojo.html#skipITs
+     * https://maven.apache.org/surefire/#3-6-0
+     */
+    public static final String PROP_SKIP_ITS = "skipITs"; // NOI18N
 
     @Override public boolean checkRunConfig(RunConfig config) {
         String action = config.getActionName();
@@ -59,17 +67,39 @@ public class TestChecker implements PrerequisitesChecker {
                     config.setProperty("test", test + '#' + method);
                 }
         }
+        if (ActionProviderImpl.COMMAND_INTEGRATION_TEST_SINGLE.equals(action) ||
+            ActionProviderImpl.COMMAND_DEBUG_INTEGRATION_TEST_SINGLE.equals(action) ||
+            "profile-tests".equals(action)) //NOI18N - profile-tests is not really nice but well. 
+        {
+                String test = config.getProperties().get("it.test"); //NOI18N
+                String method = config.getProperties().get(DefaultReplaceTokenProvider.METHOD_NAME);
+                if (test != null && method != null) {
+                    config.setProperty(DefaultReplaceTokenProvider.METHOD_NAME, null);
+                    config.setProperty("it.test", test + '#' + method); //NOI18N
+                }
+        }
         if (MavenSettings.getDefault().isSkipTests()) {
             if (!String.valueOf(config.getGoals()).contains("test")) { // incl. integration-test
                 if (config.getProperties().get(PROP_SKIP_TEST) == null) {
                     config.setProperty(PROP_SKIP_TEST, "true"); //NOI18N
                 }
+                if (config.getProperties().get(PROP_SKIP_ITS) == null) {
+                    config.setProperty(PROP_SKIP_ITS, "true"); //NOI18N
+                }
             }
         }
         if (ActionProvider.COMMAND_TEST_SINGLE.equals(action) ||
+            ActionProviderImpl.COMMAND_INTEGRATION_TEST_SINGLE.equals(action) ||
             ActionProvider.COMMAND_DEBUG_TEST_SINGLE.equals(action) ||
+            ActionProviderImpl.COMMAND_DEBUG_INTEGRATION_TEST_SINGLE.equals(action) ||
             ActionProvider.COMMAND_PROFILE_TEST_SINGLE.equals(action)) {
-            String test = config.getProperties().get("test");
+            String test;
+            if (ActionProviderImpl.COMMAND_INTEGRATION_TEST_SINGLE.equals(action) ||
+                ActionProviderImpl.COMMAND_DEBUG_INTEGRATION_TEST_SINGLE.equals(action)) {
+                test = config.getProperties().get("it.test"); //NOI18N
+            } else {
+                test = config.getProperties().get("test"); //NOI18N
+            }
             if (test != null) {
                 //#213783  when running tests validate that the test file exists
                 FileObject origFile = config.getSelectedFileObject();

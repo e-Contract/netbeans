@@ -5,8 +5,8 @@ class SpecialGroovyClass implements |Runnable, Serializable {
 PACKAGE    com                                        null
 PACKAGE    groovy                                     null
 PACKAGE    groovyjarjarantlr                          null
+PACKAGE    groovyjarjarantlr4                         null
 PACKAGE    groovyjarjarasm                            null
-PACKAGE    groovyjarjarcommonscli                     null
 PACKAGE    groovyjarjarpicocli                        null
 PACKAGE    java                                       null
 PACKAGE    javax                                      null
@@ -61,11 +61,13 @@ CLASS      MutableMetaClass                           null
 CLASS      NavigableMap                               null
 CLASS      NavigableSet                               null
 CLASS      ObjectInput                                null
+CLASS      ObjectInputFilter                          null
 CLASS      ObjectInputValidation                      null
 CLASS      ObjectOutput                               null
 CLASS      ObjectStreamConstants                      null
 CLASS      Observer                                   null
 CLASS      PrimitiveIterator                          null
+CLASS      ProcessHandle                              null
 CLASS      PropertyAccessInterceptor                  null
 CLASS      ProtocolFamily                             null
 CLASS      Queue                                      null

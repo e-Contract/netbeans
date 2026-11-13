@@ -27,6 +27,7 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Iterator;
+import java.util.List;
 import org.openide.ErrorManager;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.Lookups;
@@ -107,7 +108,7 @@ public abstract class GrammarQueryManager {
 
         private static final String FOLDER = "Plugins/XML/GrammarQueryManagers";// NOI18N
         
-        private Lookup.Result registrations;
+        private Lookup.Result<GrammarQueryManager> registrations;
         
         private static ThreadLocal<GrammarQueryManager> transaction =
                 new ThreadLocal<GrammarQueryManager>();
@@ -144,10 +145,11 @@ public abstract class GrammarQueryManager {
             }
         }
         
+        @Override
         public Enumeration enabled(GrammarEnvironment ctx) {
-            Iterator<GrammarQueryManager> it = getRegistrations();
+            Iterator<? extends GrammarQueryManager> it = getRegistrations();
             transaction.set(null);
-            ArrayList list = new ArrayList(5);
+            List list = new ArrayList<>(5);
             {
                 Enumeration en = ctx.getDocumentChildren();
                 while (en.hasMoreElements()) {
@@ -171,7 +173,7 @@ public abstract class GrammarQueryManager {
             return null;
         }
         
-        private synchronized Iterator getRegistrations() {
+        private synchronized Iterator<? extends GrammarQueryManager> getRegistrations() {
             if (registrations != null) {
                 return registrations.allInstances().iterator();
             }

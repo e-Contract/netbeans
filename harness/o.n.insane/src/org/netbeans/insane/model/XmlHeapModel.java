@@ -66,7 +66,7 @@ class XmlHeapModel implements org.netbeans.insane.model.HeapModel {
     }
     
     public Item getItem(int id) {
-        Item itm = items.get(new java.lang.Integer(id));
+        Item itm = items.get(id);
         if (itm == null) throw new IllegalArgumentException("Bad ID");
         return itm;
     }
@@ -150,7 +150,7 @@ class XmlHeapModel implements org.netbeans.insane.model.HeapModel {
 
     Item createItem(int id, String type, int size, String val) {
         Item item = new MemItem(id, type, size, val);
-        items.put(new Integer(id), item);
+        items.put(Integer.valueOf(id), item);
         return item;
     }
 

@@ -399,6 +399,330 @@ public class PHPBracesMatcherTest extends PHPTestBase {
         );
     }
 
+    public void testAttributeSyntax_01() throws Exception {
+        matchesBackward(""
+                + "~#[A(1)@]^\n"
+                + "class AttributeSyntax {}"
+        );
+        matchesForward(""
+                + "@^#[A(1)~]\n"
+                + "class AttributeSyntax {}"
+        );
+    }
+
+    public void testAttributeSyntax_02() throws Exception {
+        matchesBackward(""
+                + "~#[A(1), B(\"param\"), \\C\\Test()@]^\n"
+                + "class AttributeSyntax {}"
+        );
+        matchesForward(""
+                + "@#^[A(1), B(\"param\"), \\C\\Test()~]\n"
+                + "class AttributeSyntax {}"
+        );
+    }
+
+    public void testAttributeSyntax_03() throws Exception {
+        matchesBackward(""
+                + "~#[\n"
+                + "    A(1),\n"
+                + "    A(2),\n"
+                + "    A(3),\n"
+                + "    A(4),\n"
+                + "@]^\n"
+                + "class AttributeSyntax {}"
+        );
+        matchesForward(""
+                + "@^#[\n"
+                + "    A(1),\n"
+                + "    A(2),\n"
+                + "    A(3),\n"
+                + "    A(4),\n"
+                + "~]\n"
+                + "class AttributeSyntax {}"
+        );
+    }
+
+    public void testAttributeSyntax_04a() throws Exception {
+        matchesBackward(""
+                + "~#[\n"
+                + "    A([\n"
+                + "        1,\n"
+                + "        2,\n"
+                + "    ]),\n"
+                + "@]^\n"
+                + "class AttributeSyntax {}"
+        );
+        matchesForward(""
+                + "@^#[\n"
+                + "    A([\n"
+                + "        1,\n"
+                + "        2,\n"
+                + "    ]),\n"
+                + "~]\n"
+                + "class AttributeSyntax {}"
+        );
+    }
+
+    public void testAttributeSyntax_04b() throws Exception {
+        matchesBackward(""
+                + "#[\n"
+                + "    A(~[\n"
+                + "        1,\n"
+                + "        2,\n"
+                + "    @]^),\n"
+                + "]\n"
+                + "class AttributeSyntax {}"
+        );
+        matchesForward(""
+                + "#[\n"
+                + "    A(@^[\n"
+                + "        1,\n"
+                + "        2,\n"
+                + "    ~]),\n"
+                + "]\n"
+                + "class AttributeSyntax {}"
+        );
+    }
+
+    public void testAttributeSyntax_05a() throws Exception {
+        matchesBackward(""
+                + "#[Class1(1)]\n"
+                + "class AttributeSyntax\n"
+                + "~{\n"
+                + "    #[Class1(4), Class2(4)] // group\n"
+                + "    public $staticField;\n"
+                + "\n"
+                + "    #[Class1(5)]\n"
+                + "    public function method(#[Class1(6)] $param1, #[Class1('foo', 'bar', 7)] int $pram2) {}\n"
+                + "\n"
+                + "@}^"
+        );
+        matchesForward(""
+                + "#[Class1(1)]\n"
+                + "class AttributeSyntax\n"
+                + "@^{\n"
+                + "    #[Class1(4), Class2(4)] // group\n"
+                + "    public $staticField;\n"
+                + "\n"
+                + "    #[Class1(5)]\n"
+                + "    public function method(#[Class1(6)] $param1, #[Class1('foo', 'bar', 7)] int $pram2) {}\n"
+                + "\n"
+                + "~}"
+        );
+    }
+
+    public void testAttributeSyntax_05b() throws Exception {
+        matchesBackward(""
+                + "#[Class1(1)]\n"
+                + "class AttributeSyntax\n"
+                + "{\n"
+                + "    #[Class1(4), Class2(4)] // group\n"
+                + "    public $staticField;\n"
+                + "\n"
+                + "    #[Class1(5)]\n"
+                + "    public function method~(#[Class1(6)] $param1, #[Class1('foo', 'bar', 7)] int $pram2@)^ {}\n"
+                + "\n"
+                + "}"
+        );
+        matchesForward(""
+                + "#[Class1(1)]\n"
+                + "class AttributeSyntax\n"
+                + "{\n"
+                + "    #[Class1(4), Class2(4)] // group\n"
+                + "    public $staticField;\n"
+                + "\n"
+                + "    #[Class1(5)]\n"
+                + "    public function method@^(#[Class1(6)] $param1, #[Class1('foo', 'bar', 7)] int $pram2~) {}\n"
+                + "\n"
+                + "}"
+        );
+    }
+
+    public void testAttributeSyntax_05c() throws Exception {
+        matchesBackward(""
+                + "#[Class1(1)]\n"
+                + "class AttributeSyntax\n"
+                + "{\n"
+                + "    #[Class1(4), Class2(4)] // group\n"
+                + "    public $staticField;\n"
+                + "\n"
+                + "    #[Class1(5)]\n"
+                + "    public function method(#[Class1(6)] $param1, ~#[Class1('foo', 'bar', 7)@]^ int $pram2) {}\n"
+                + "\n"
+                + "}"
+        );
+        matchesForward(""
+                + "#[Class1(1)]\n"
+                + "class AttributeSyntax\n"
+                + "{\n"
+                + "    #[Class1(4), Class2(4)] // group\n"
+                + "    public $staticField;\n"
+                + "\n"
+                + "    #[Class1(5)]\n"
+                + "    public function method(#[Class1(6)] $param1, @^#[Class1('foo', 'bar', 7)~] int $pram2) {}\n"
+                + "\n"
+                + "}"
+        );
+    }
+
+    public void testAttributeSyntax_05d() throws Exception {
+        matchesBackward(""
+                + "#[Class1(1)]\n"
+                + "class AttributeSyntax\n"
+                + "{\n"
+                + "    #[Class1(4), Class2(4)] // group\n"
+                + "    public $staticField;\n"
+                + "\n"
+                + "    #[Class1(5)]\n"
+                + "    public function method(#[Class1(6)] $param1, #[Class1~('foo', 'bar', 7@)^] int $pram2) {}\n"
+                + "\n"
+                + "}"
+        );
+        matchesForward(""
+                + "#[Class1(1)]\n"
+                + "class AttributeSyntax\n"
+                + "{\n"
+                + "    #[Class1(4), Class2(4)] // group\n"
+                + "    public $staticField;\n"
+                + "\n"
+                + "    #[Class1(5)]\n"
+                + "    public function method(#[Class1(6)] $param1, #[Class1@^('foo', 'bar', 7~)] int $pram2) {}\n"
+                + "\n"
+                + "}"
+        );
+    }
+
+    public void testDynamicClassConstantFetch_01a() throws Exception {
+        matchesBackward(""
+                + "class Test {\n"
+                + "    public const TEST = self::~{self::TES . self::T@}^;\n"
+                + "}"
+        );
+        matchesForward(""
+                + "class Test {\n"
+                + "    public const TEST = self::@^{self::TES . self::T~};\n"
+                + "}"
+        );
+    }
+
+
+    public void testDynamicClassConstantFetch_01b() throws Exception {
+        matchesBackward(""
+                + "class Test {\n"
+                + "    public const TEST = self::@{^self::TES . self::T~};\n"
+                + "}"
+        );
+        matchesForward(""
+                + "class Test {\n"
+                + "    public const TEST = self::~{self::TES . self::T@^};\n"
+                + "}"
+        );
+    }
+
+    public void testDynamicClassConstantFetch_02a() throws Exception {
+        matchesBackward(""
+                + "class Test {\n"
+                + "    public const TEST = self::~{self::{self::TES} . self::T@}^;\n"
+                + "}"
+        );
+        matchesForward(""
+                + "class Test {\n"
+                + "    public const TEST = self::@^{self::{self::TES} . self::T~};\n"
+                + "}"
+        );
+    }
+
+    public void testDynamicClassConstantFetch_02b() throws Exception {
+        matchesBackward(""
+                + "class Test {\n"
+                + "    public const TEST = self::@{^self::{self::TES} . self::T~};\n"
+                + "}"
+        );
+        matchesForward(""
+                + "class Test {\n"
+                + "    public const TEST = self::~{self::{self::TES} . self::T@^};\n"
+                + "}"
+        );
+    }
+
+    public void testDynamicClassConstantFetch_02c() throws Exception {
+        matchesBackward(""
+                + "class Test {\n"
+                + "    public const TEST = self::{self::~{self::TES@}^ . self::T};\n"
+                + "}"
+        );
+        matchesForward(""
+                + "class Test {\n"
+                + "    public const TEST = self::{self::@^{self::TES~} . self::T};\n"
+                + "}"
+        );
+    }
+
+    public void testDynamicClassConstantFetch_02d() throws Exception {
+        matchesBackward(""
+                + "class Test {\n"
+                + "    public const TEST = self::{self::@{^self::TES~} . self::T};\n"
+                + "}"
+        );
+        matchesForward(""
+                + "class Test {\n"
+                + "    public const TEST = self::{self::~{self::TES@^} . self::T};\n"
+                + "}"
+        );
+    }
+
+    public void testDynamicClassConstantFetch_03a() throws Exception {
+        matchesBackward(""
+                + "class Test {\n"
+                + "    public const TEST = self::~{self::{self::TES}@}^;\n"
+                + "}"
+        );
+        matchesForward(""
+                + "class Test {\n"
+                + "    public const TEST = self::@^{self::{self::TES}~};\n"
+                + "}"
+        );
+    }
+
+    public void testDynamicClassConstantFetch_03b() throws Exception {
+        matchesBackward(""
+                + "class Test {\n"
+                + "    public const TEST = self::@{^self::{self::TES}~};\n"
+                + "}"
+        );
+        matchesForward(""
+                + "class Test {\n"
+                + "    public const TEST = self::~{self::{self::TES}@^};\n"
+                + "}"
+        );
+    }
+
+    public void testDynamicClassConstantFetch_03c() throws Exception {
+        matchesBackward(""
+                + "class Test {\n"
+                + "    public const TEST = self::{self::~{self::TES@}^};\n"
+                + "}"
+        );
+        matchesForward(""
+                + "class Test {\n"
+                + "    public const TEST = self::{self::@^{self::TES~}};\n"
+                + "}"
+        );
+    }
+
+    public void testDynamicClassConstantFetch_03d() throws Exception {
+        matchesBackward(""
+                + "class Test {\n"
+                + "    public const TEST = self::{self::@{^self::TES~}};\n"
+                + "}"
+        );
+        matchesForward(""
+                + "class Test {\n"
+                + "    public const TEST = self::{self::~{self::TES@^}};\n"
+                + "}"
+        );
+    }
+
     public void testFindContext_01() throws Exception {
         checkBraceContext("braceContextTest.php", "^} elseif ($i == 1) { // if", true);
     }
@@ -536,6 +860,44 @@ public class PHPBracesMatcherTest extends PHPTestBase {
         checkBraceContext("php80/matchExpression_04.php", "        ^}; // match", true);
     }
 
+    public void testFindContextForEnumerations_01() throws Exception {
+        checkBraceContext("php81/enumerations.php", "^} // enum 1", true);
+    }
+
+    public void testFindContextForEnumerations_02() throws Exception {
+        checkBraceContext("php81/enumerations.php", "^} // enum 2", true);
+    }
+
+    public void testFindContextForEnumerations_03() throws Exception {
+        checkBraceContext("php81/enumerations.php", "^} // enum 3", true);
+    }
+
+    public void testFindContextForEnumerations_04() throws Exception {
+        checkBraceContext("php81/enumerations.php", "^} // enum 4", true);
+    }
+
+    public void testFindContextForEnumerations_05() throws Exception {
+        checkBraceContext("php81/enumerations.php", "^} // enum 5", true);
+    }
+
+    public void testFindContextForEnumerations_06() throws Exception {
+        checkBraceContext("php81/enumerations.php", "^} // enum 6", true);
+    }
+
+    public void testFindContextGH7124_01() throws Exception {
+        BraceContext braceContext = getBraceContext("braceContextGH7124.php", "        {test^}", true);
+        assertNull(braceContext);
+    }
+
+    public void testFindContextGH7124_02() throws Exception {
+        BraceContext braceContext = getBraceContext("braceContextGH7124.php", "        ${test^};", true);
+        assertNull(braceContext);
+    }
+
+    public void testFindContextGH7124_03() throws Exception {
+        checkBraceContext("braceContextGH7124.php", "^} // method", true);
+    }
+
     private void matchesBackward(String original) throws BadLocationException {
         matches(original, true);
     }
@@ -590,6 +952,16 @@ public class PHPBracesMatcherTest extends PHPTestBase {
      * @throws Exception
      */
     private void checkBraceContext(String filePath, String caretLine, boolean backward) throws Exception {
+        BraceContext context = getBraceContext(filePath, caretLine, backward);
+        assertNotNull(context);
+
+        Source testSource = getTestSource(getTestFile(TEST_DIRECTORY + filePath));
+        Document doc = testSource.getDocument(true);
+        String result = annoteteBraceContextRanges(doc, context);
+        assertDescriptionMatches(testSource.getFileObject(), result, true, ".bracecontext", true);
+    }
+
+    private BraceContext getBraceContext(String filePath, String caretLine, boolean backward) throws Exception {
         Source testSource = getTestSource(getTestFile(TEST_DIRECTORY + filePath));
 
         Document doc = testSource.getDocument(true);
@@ -607,11 +979,7 @@ public class PHPBracesMatcherTest extends PHPTestBase {
         assertNotNull(origin);
         assertNotNull(matches);
 
-        BraceContext context = matcher.findContext(origin[0]);
-        assertNotNull(context);
-
-        String result = annoteteBraceContextRanges(doc, context);
-        assertDescriptionMatches(testSource.getFileObject(), result, true, ".bracecontext", true);
+        return matcher.findContext(origin[0]);
     }
 
     private String annoteteBraceContextRanges(Document document, final BraceContext context) throws BadLocationException {

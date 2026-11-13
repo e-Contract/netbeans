@@ -18,6 +18,8 @@
  */
 package org.netbeans.modules.java.source.indexing;
 
+import com.sun.tools.javac.comp.Enter;
+import com.sun.tools.javac.processing.JavacProcessingEnvironment;
 import com.sun.tools.javac.util.Abort;
 import com.sun.tools.javac.util.ClientCodeException;
 import com.sun.tools.javac.util.Context;
@@ -28,12 +30,15 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
+import java.security.CodeSource;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -43,6 +48,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -146,6 +152,9 @@ public class APTUtils implements ChangeListener, PropertyChangeListener {
                     false);
         });
         usedRoots = new UsedRoots(root.toURL());
+        if (compilePath != null) {
+            compilePath.addPropertyChangeListener(this);
+        }
     }
 
     @CheckForNull
@@ -208,9 +217,7 @@ public class APTUtils implements ChangeListener, PropertyChangeListener {
     }
 
     public static void sourceRootUnregistered(Iterable<? extends URL> roots) {
-        for (URL root : roots) {
-            knownSourceRootsMap.remove(root);
-        }
+        roots.forEach(knownSourceRootsMap::remove);
         //XXX hack make sure we are not holding APTUtils for any unknown roots
         //just in case something goes wrong:
         for (URL unknown : PathRegistry.getDefault().getUnknownRoots()) {
@@ -310,12 +317,16 @@ public class APTUtils implements ChangeListener, PropertyChangeListener {
     @Override
     public void propertyChange(PropertyChangeEvent evt) {
         if (ClassPath.PROP_ROOTS.equals(evt.getPropertyName())) {
-            classLoaderCache = null;
-            ROOT_CHANGE_RP.execute(()-> {
-                if (verifyProcessorPath(root, usedRoots, PROCESSOR_MODULE_PATH) || verifyProcessorPath(root, usedRoots, PROCESSOR_PATH)) {
-                    slidingRefresh.schedule(SLIDING_WINDOW);
-                }
-            });
+            if (evt.getSource() == compilePath) {
+                stateChanged(null);
+            } else {
+                classLoaderCache = null;
+                ROOT_CHANGE_RP.execute(()-> {
+                    if (verifyProcessorPath(root, usedRoots, PROCESSOR_MODULE_PATH) || verifyProcessorPath(root, usedRoots, PROCESSOR_PATH)) {
+                        slidingRefresh.schedule(SLIDING_WINDOW);
+                    }
+                });
+            }
         }
     }
 
@@ -352,7 +363,13 @@ public class APTUtils implements ChangeListener, PropertyChangeListener {
             pp = ClassPath.getClassPath(root, JavaClassPathConstants.PROCESSOR_PATH);
             if (pp != null && processorPath.compareAndSet(null, pp)) {
                 bootPath = ClassPath.getClassPath(root, ClassPath.BOOT);
+                if (compilePath != null) {
+                    compilePath.removePropertyChangeListener(this);
+                }
                 compilePath = ClassPath.getClassPath(root, ClassPath.COMPILE);
+                if (compilePath != null) {
+                    compilePath.addPropertyChangeListener(this);
+                }
                 listenOnProcessorPath(pp, this);
                 classLoaderCache = null;
             }
@@ -369,12 +386,10 @@ public class APTUtils implements ChangeListener, PropertyChangeListener {
         for (String name : processorNames) {
             try {
                 Class<?> clazz = Class.forName(name, true, cl);
-                Object instance = clazz.newInstance();
+                Object instance = clazz.getDeclaredConstructor().newInstance();
                 if (instance instanceof Processor) {
                     result.add(new ErrorToleratingProcessor((Processor) instance));
                 }
-            } catch (ThreadDeath td) {
-                throw td;
             } catch (Throwable t) {
                 LOG.log(Level.FINE, null, t);
             }
@@ -405,7 +420,7 @@ public class APTUtils implements ChangeListener, PropertyChangeListener {
                         try {
                             final URLConnection uc = resources.nextElement().openConnection();
                             uc.setUseCaches(false);
-                            ins = new BufferedReader(new InputStreamReader(uc.getInputStream(), "UTF-8")); //NOI18N
+                            ins = new BufferedReader(new InputStreamReader(uc.getInputStream(), StandardCharsets.UTF_8));
                             String line;
                             while ((line = ins.readLine()) != null) {
                                 int hash = line.indexOf('#');
@@ -462,9 +477,7 @@ public class APTUtils implements ChangeListener, PropertyChangeListener {
                     return vote;
                 }
             }
-            final String cmpOptsStr = JavacParser.validateCompilerOptions(compilerOptions.getArguments(), null)
-                    .stream()
-                    .collect(Collectors.joining(" "));  //NOI18N
+            final String cmpOptsStr = String.join(" ", JavacParser.validateCompilerOptions(compilerOptions.getArguments(), null));  //NOI18N
             if (JavaIndex.ensureAttributeValue(url, COMPILER_OPTIONS, cmpOptsStr, checkOnly)) {
                 JavaIndex.LOG.fine("forcing reindex due to compiler options change"); //NOI18N
                 vote = true;
@@ -620,7 +633,7 @@ public class APTUtils implements ChangeListener, PropertyChangeListener {
                     .filter(pUsed)
                     .map((f) -> Pair.of(f, f.isFile() ? f.length() : -1))
                     .filter(pModified)
-                    .collect(Collectors.toList());
+                    .toList();
             if (!times.isEmpty()) {
                 LOG.log(Level.FINEST, "Important changed: {0}", times);    //NOI18N
                 for (Pair<File,Long> p : times) {
@@ -720,9 +733,19 @@ public class APTUtils implements ChangeListener, PropertyChangeListener {
         return SourceForBinaryQuery.findSourceRoots2(root).preferSources();
     }
 
-    //keep synchronized with libs.javacapi/manifest.mf and libs.javacimpl/manifest.mf
+    //keep synchronized with java/libs.nbjavacapi/manifest.mf (OpenIDE-Module-Hide-Classpath-Packages attribute)
     //when adding new packages, double-check the quick path in loadClass below:
-    private static final Iterable<? extends String> javacPackages = Arrays.asList("com.sun.javadoc.", "com.sun.source.", "javax.annotation.processing.", "javax.lang.model.", "javax.tools.", "com.sun.tools.javac.", "com.sun.tools.javadoc.", "com.sun.tools.classfile.", "com.sun.tools.hc.");
+    private static final List<String> javacPackages = List.of(
+            "javax.annotation.processing.",
+            "javax.lang.model.",
+            "javax.tools.",
+            "com.sun.source.",
+            "com.sun.tools.classfile.",
+            "com.sun.tools.javac.",
+            "com.sun.tools.doclint.",
+            "com.sun.tools.javap."
+    );
+
     private static final class BypassOpenIDEUtilClassLoader extends ClassLoader {
         private final ClassLoader contextCL;
         public BypassOpenIDEUtilClassLoader(ClassLoader contextCL) {
@@ -942,11 +965,12 @@ public class APTUtils implements ChangeListener, PropertyChangeListener {
         }
     }
 
-    private static final class ErrorToleratingProcessor implements Processor {
+    private final class ErrorToleratingProcessor implements Processor {
 
         private final Processor delegate;
         private ProcessingEnvironment processingEnv;
-        private boolean valid = true;
+        private boolean initFailed = false;
+        private boolean processFailed = false;
 
         public ErrorToleratingProcessor(Processor delegate) {
             this.delegate = delegate;
@@ -954,54 +978,93 @@ public class APTUtils implements ChangeListener, PropertyChangeListener {
 
         @Override
         public Set<String> getSupportedOptions() {
+            if (initFailed) {
+                return Collections.emptySet();
+            }
             return delegate.getSupportedOptions();
         }
 
         @Override
         public Set<String> getSupportedAnnotationTypes() {
+            if (initFailed) {
+                return Collections.emptySet();
+            }
             return delegate.getSupportedAnnotationTypes();
         }
 
         @Override
         public SourceVersion getSupportedSourceVersion() {
+            if (initFailed) {
+                return SourceVersion.latest();
+            }
             return delegate.getSupportedSourceVersion();
         }
 
         @Override
         public void init(ProcessingEnvironment processingEnv) {
-            delegate.init(processingEnv);
+            try {
+                delegate.init(processingEnv);
+            } catch (ClientCodeException | Abort err) {
+                initFailed = true;
+                throw err;
+            } catch (Throwable t) {
+                initFailed = true;
+                classLoaderCache = null; // in case of static initializer failure (e.g lombok); clear the loader so that next time it fails again in the same way
+                Enter enter = Enter.instance(((JavacProcessingEnvironment) processingEnv).getContext());
+                Element topLevel = enter.getEnvs().iterator().hasNext() ? enter.getEnvs().iterator().next().enclClass.sym
+                                                                        : null;
+                reportError(processingEnv, t, topLevel);
+            }
             this.processingEnv = processingEnv;
         }
 
         @Override
-        @Messages("ERR_ProcessorException=Annotation processor {0} failed with an exception: {1}")
         public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-            if (!valid) {
+            if (initFailed || processFailed) {
                 return false;
             }
             try {
                 return delegate.process(annotations, roundEnv);
-            } catch (ClientCodeException | ThreadDeath | Abort err) {
-                valid = false;
+            } catch (ClientCodeException | Abort err) {
+                processFailed = true;
                 throw err;
             } catch (Throwable t) {
-                valid = false;
+                processFailed = true;
+                classLoaderCache = null; // in case of static initializer failure (e.g lombok); clear the loader so that next time it fails again in the same way
                 Element el = roundEnv.getRootElements().isEmpty() ? null : roundEnv.getRootElements().iterator().next();
-                StringBuilder exception = new StringBuilder();
-                exception.append(t.getMessage()).append("\n");
-                for (StackTraceElement ste : t.getStackTrace()) {
-                    exception.append(ste).append("\n");
-                }
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, Bundle.ERR_ProcessorException(delegate.getClass().getName(), exception.toString()), el);
+                reportError(processingEnv, t, el);
                 return false;
             }
         }
 
+        @Messages({
+            "# {0} - processor name",
+            "# {1} - processor jar",
+            "# {2} - processor exception",
+            "# {3} - javac version",
+            "ERR_ProcessorException=An annotation processor failed on embedded javac {3}. Try updating to a newer version.\n    class: {0}\n    location: {1}\n{2}"
+        })
+        private void reportError(ProcessingEnvironment processingEnv, Throwable t, Element targetEl) {
+            StringWriter exception = new StringWriter();
+            try (PrintWriter pw = new PrintWriter(exception)) {
+                t.printStackTrace(pw);
+            }
+            CodeSource cs = delegate.getClass().getProtectionDomain().getCodeSource();
+            String message = Bundle.ERR_ProcessorException(delegate.getClass().getName(),
+                    Objects.toString(cs != null ? cs.getLocation() : null, "none"),
+                    exception.toString(),
+                    SourceVersion.latest().runtimeVersion().feature()
+            );
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, message, targetEl);
+        }
+
         @Override
         public Iterable<? extends Completion> getCompletions(Element element, AnnotationMirror annotation, ExecutableElement member, String userText) {
+            if (initFailed) {
+                return Collections.emptySet();
+            }
             return delegate.getCompletions(element, annotation, member, userText);
         }
 
     }
-
 }

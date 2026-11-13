@@ -109,10 +109,7 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
     /** Jersey Library support. */
     private final Hk2LibraryProvider libraryProvider;
 
-    ////////////////////////////////////////////////////////////////////////////
     // Static methods                                                         //
-    ////////////////////////////////////////////////////////////////////////////
-
     /**
      * Constructor helper to initialize local Lookup instance.
      * <p/>
@@ -197,6 +194,22 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
                 case v8_0_0_web: profiles[index++] = Profile.JAKARTA_EE_8_WEB;
                                break;
                 case v8_0_0:     profiles[index++] = Profile.JAKARTA_EE_8_FULL;
+                               break;
+                case v9_0_0_web: profiles[index++] = Profile.JAKARTA_EE_9_WEB;
+                               break;
+                case v9_0_0:     profiles[index++] = Profile.JAKARTA_EE_9_FULL;
+                               break;
+                case v9_1_0_web: profiles[index++] = Profile.JAKARTA_EE_9_1_WEB;
+                               break;
+                case v9_1_0:     profiles[index++] = Profile.JAKARTA_EE_9_1_FULL;
+                               break;
+                case v10_0_0_web: profiles[index++] = Profile.JAKARTA_EE_10_WEB;
+                               break;
+                case v10_0_0:     profiles[index++] = Profile.JAKARTA_EE_10_FULL;
+                               break;
+                case v11_0_0_web: profiles[index++] = Profile.JAKARTA_EE_11_WEB;
+                               break;
+                case v11_0_0:     profiles[index++] = Profile.JAKARTA_EE_11_FULL;
                                break;
             }
         } else {
@@ -284,10 +297,7 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
         return moduleTypeSet;
     }
 
-    ////////////////////////////////////////////////////////////////////////////
     // Constructors                                                           //
-    ////////////////////////////////////////////////////////////////////////////
-
     /**
      * Creates an instance of GlassFish JavaEE platform.
      * <p/>
@@ -497,7 +507,7 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
                         cPath.add(f);
                     }
                 }
-                return cPath.toArray(new File[cPath.size()]);
+                return cPath.toArray(File[]::new);
             }
 
             if (TOOL_WSCOMPILE.equals(toolName)) {
@@ -510,7 +520,7 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
                         cPath.add(f);
                     }
                 }
-                return cPath.toArray(new File[cPath.size()]);
+                return cPath.toArray(File[]::new);
             }
 
             File domainDir;
@@ -756,11 +766,26 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
             if (J2eePlatform.TOOL_PROP_JVM_OPTS.equals(propertyName)) {
                 if(domainPath != null) {
                     StringBuilder sb = new StringBuilder();
-                    sb.append("-Djava.endorsed.dirs=");
-                     sb.append(quotedString(new File(root,"lib/endorsed").getAbsolutePath()));
-                    sb.append(File.pathSeparator);
-                     sb.append(quotedString(new File(root,"modules/endorsed").getAbsolutePath()));
-                     sb.append(" -javaagent:");
+                    // The endorsed standards mechanism (-Djava.endorsed.dirs) was
+                    // removed in JDK 9 (JEP 220); passing it aborts JVM startup.
+                    // Only emit it for the endorsed directories that actually exist
+                    // (legacy servers on JDK 8 or earlier); modern GlassFish ships
+                    // none, so the option is omitted and the app client can run on
+                    // JDK 9+.
+                    StringBuilder endorsedDirs = new StringBuilder();
+                    for (String endorsedDir : new String[] {"lib/endorsed", "modules/endorsed"}) { // NOI18N
+                        File dir = new File(root, endorsedDir);
+                        if (dir.isDirectory()) {
+                            if (endorsedDirs.length() > 0) {
+                                endorsedDirs.append(File.pathSeparator);
+                            }
+                            endorsedDirs.append(quotedString(dir.getAbsolutePath()));
+                        }
+                    }
+                    if (endorsedDirs.length() > 0) {
+                        sb.append("-Djava.endorsed.dirs=").append(endorsedDirs).append(' '); // NOI18N
+                    }
+                     sb.append("-javaagent:");
                      String url = dm.getCommonServerSupport().getInstanceProperties().get(GlassfishModule.URL_ATTR);
                      File f = new File(root,"lib/gf-client.jar"); // NOI18N
                      if (f.exists()) {
@@ -1014,7 +1039,7 @@ public class Hk2JavaEEPlatformImpl extends J2eePlatformImpl2 {
                 else {
                     classPathType = ClassPath.COMPILE;
                 }
-                ProjectClassPathModifier.addRoots(urls.toArray( new URL[ urls.size()]),
+                ProjectClassPathModifier.addRoots(urls.toArray(URL[]::new),
                         sourceRoot, classPathType );
             }
             catch (UnsupportedOperationException | IOException ex) {

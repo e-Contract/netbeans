@@ -1,5 +1,5 @@
 #Signature file v4.1
-#Version 1.8
+#Version 1.36.0
 
 CLSS public abstract interface java.io.Serializable
 
@@ -8,8 +8,10 @@ meth public abstract int compareTo({java.lang.Comparable%0})
 
 CLSS public abstract java.lang.Enum<%0 extends java.lang.Enum<{java.lang.Enum%0}>>
 cons protected init(java.lang.String,int)
+innr public final static EnumDesc
 intf java.io.Serializable
 intf java.lang.Comparable<{java.lang.Enum%0}>
+intf java.lang.constant.Constable
 meth protected final java.lang.Object clone() throws java.lang.CloneNotSupportedException
 meth protected final void finalize()
 meth public final boolean equals(java.lang.Object)
@@ -18,15 +20,16 @@ meth public final int hashCode()
 meth public final int ordinal()
 meth public final java.lang.Class<{java.lang.Enum%0}> getDeclaringClass()
 meth public final java.lang.String name()
+meth public final java.util.Optional<java.lang.Enum$EnumDesc<{java.lang.Enum%0}>> describeConstable()
 meth public java.lang.String toString()
 meth public static <%0 extends java.lang.Enum<{%%0}>> {%%0} valueOf(java.lang.Class<{%%0}>,java.lang.String)
 supr java.lang.Object
-hfds name,ordinal
 
 CLSS public java.lang.Object
 cons public init()
 meth protected java.lang.Object clone() throws java.lang.CloneNotSupportedException
 meth protected void finalize() throws java.lang.Throwable
+ anno 0 java.lang.Deprecated(boolean forRemoval=false, java.lang.String since="9")
 meth public boolean equals(java.lang.Object)
 meth public final java.lang.Class<?> getClass()
 meth public final void notify()
@@ -36,6 +39,9 @@ meth public final void wait(long) throws java.lang.InterruptedException
 meth public final void wait(long,int) throws java.lang.InterruptedException
 meth public int hashCode()
 meth public java.lang.String toString()
+
+CLSS public abstract interface java.lang.constant.Constable
+meth public abstract java.util.Optional<? extends java.lang.constant.ConstantDesc> describeConstable()
 
 CLSS public final org.netbeans.modules.gradle.java.api.GradleJavaProject
 fld public final static java.lang.String CLASSIFIER_JAVADOC = "javadoc"
@@ -57,6 +63,7 @@ hfds archives,coverageData,fileToSourceSetCache,mainJar,sourceSets,testClassesRo
 
 CLSS public final org.netbeans.modules.gradle.java.api.GradleJavaSourceSet
 cons public init(java.lang.String)
+fld public final static java.io.File UNKNOWN
 fld public final static java.lang.String MAIN_SOURCESET_NAME = "main"
 fld public final static java.lang.String TEST_SOURCESET_NAME = "test"
 innr public final static !enum ClassPathType
@@ -74,24 +81,29 @@ meth public final java.util.Collection<java.io.File> getAvailableDirs()
 meth public final java.util.Collection<java.io.File> getAvailableDirs(boolean)
 meth public final java.util.Set<java.io.File> getGroovyDirs()
 meth public final java.util.Set<java.io.File> getJavaDirs()
+meth public final java.util.Set<java.io.File> getKotlinDirs()
 meth public final java.util.Set<java.io.File> getResourcesDirs()
 meth public final java.util.Set<java.io.File> getScalaDirs()
 meth public int hashCode()
 meth public java.io.File findResource(java.lang.String)
+meth public java.io.File getCompilerJavaHome(org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType)
+meth public java.io.File getOutputClassDir(org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType)
 meth public java.io.File getOutputResources()
 meth public java.lang.String getAnnotationProcessorConfigurationName()
 meth public java.lang.String getBuildTaskName(org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType)
 meth public java.lang.String getClassesTaskName()
 meth public java.lang.String getCompileConfigurationName()
+ anno 0 java.lang.Deprecated(boolean forRemoval=false, java.lang.String since="")
 meth public java.lang.String getCompileTaskName(java.lang.String)
 meth public java.lang.String getName()
 meth public java.lang.String getProcessResourcesTaskName()
 meth public java.lang.String getRuntimeConfigurationName()
+ anno 0 java.lang.Deprecated(boolean forRemoval=false, java.lang.String since="")
 meth public java.lang.String getSourcesCompatibility()
- anno 0 java.lang.Deprecated()
+ anno 0 java.lang.Deprecated(boolean forRemoval=false, java.lang.String since="")
 meth public java.lang.String getSourcesCompatibility(org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType)
 meth public java.lang.String getTargetCompatibility()
- anno 0 java.lang.Deprecated()
+ anno 0 java.lang.Deprecated(boolean forRemoval=false, java.lang.String since="")
 meth public java.lang.String getTargetCompatibility(org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType)
 meth public java.lang.String getTaskName(java.lang.String,java.lang.String)
 meth public java.lang.String relativePath(java.io.File)
@@ -107,7 +119,7 @@ meth public java.util.Set<org.netbeans.modules.gradle.java.api.GradleJavaSourceS
 meth public java.util.Set<org.netbeans.modules.gradle.java.api.GradleJavaSourceSet> getSourceDependencies()
 meth public org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType getSourceType(java.io.File)
 supr java.lang.Object
-hfds DEFAULT_SOURCE_COMPATIBILITY,annotationProcessorConfigurationName,annotationProcessorPath,compileClassPath,compileConfigurationName,compilerArgs,name,outputClassDirs,outputResources,runtimeClassPath,runtimeConfigurationName,sourceDependencies,sources,sourcesCompatibility,targetCompatibility,testSourceSet,webApp
+hfds DEFAULT_SOURCE_COMPATIBILITY,annotationProcessorConfigurationName,annotationProcessorPath,compileClassPath,compileConfigurationName,compilerArgs,compilerJavaHomes,name,outputClassDirs,outputResources,outputs,runtimeClassPath,runtimeConfigurationName,sourceDependencies,sources,sourcesCompatibility,targetCompatibility,testSourceSet,webApp
 
 CLSS public final static !enum org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$ClassPathType
  outer org.netbeans.modules.gradle.java.api.GradleJavaSourceSet
@@ -122,6 +134,7 @@ CLSS public final static !enum org.netbeans.modules.gradle.java.api.GradleJavaSo
 fld public final static org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType GENERATED
 fld public final static org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType GROOVY
 fld public final static org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType JAVA
+fld public final static org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType KOTLIN
 fld public final static org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType RESOURCES
 fld public final static org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType SCALA
 meth public java.lang.String toString()
@@ -129,13 +142,22 @@ meth public static org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$Sour
 meth public static org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType[] values()
 supr java.lang.Enum<org.netbeans.modules.gradle.java.api.GradleJavaSourceSet$SourceType>
 
+CLSS public final org.netbeans.modules.gradle.java.api.ProjectActions
+fld public static java.lang.String TOKEN_JAVAEXEC_ARGS
+fld public static java.lang.String TOKEN_JAVAEXEC_CWD
+fld public static java.lang.String TOKEN_JAVAEXEC_ENV
+fld public static java.lang.String TOKEN_JAVAEXEC_JVMARGS
+supr java.lang.Object
+
 CLSS public abstract interface org.netbeans.modules.gradle.java.api.ProjectSourcesClassPathProvider
 meth public abstract org.netbeans.api.java.classpath.ClassPath getProjectSourcesClassPath(java.lang.String)
 meth public abstract org.netbeans.api.java.classpath.ClassPath[] getProjectClassPath(java.lang.String)
 
 CLSS public final org.netbeans.modules.gradle.java.api.output.Location
 cons public init(java.lang.String)
+ anno 0 java.lang.Deprecated(boolean forRemoval=false, java.lang.String since="")
 cons public init(java.lang.String,java.lang.String)
+ anno 0 java.lang.Deprecated(boolean forRemoval=false, java.lang.String since="")
 innr public abstract interface static Finder
 meth public boolean isLine()
 meth public boolean isMethod()
@@ -144,8 +166,10 @@ meth public java.lang.Integer getLineNum()
 meth public java.lang.String getFileName()
 meth public java.lang.String getTarget()
 meth public java.lang.String toString()
+meth public org.netbeans.modules.gradle.java.api.output.Location withNoTarget()
+meth public static org.netbeans.modules.gradle.java.api.output.Location parseLocation(java.lang.String)
 supr java.lang.Object
-hfds CALLSTACK_ITEM_PARSER,fileName,lineNum,target
+hfds CALLSTACK_ITEM_PARSER,classNames,fileName,lineNum,target
 
 CLSS public abstract interface static org.netbeans.modules.gradle.java.api.output.Location$Finder
  outer org.netbeans.modules.gradle.java.api.output.Location
@@ -163,4 +187,10 @@ hfds finder,location
 
 CLSS public abstract interface org.netbeans.modules.gradle.java.spi.debug.GradleJavaDebugger
 meth public abstract void attachDebugger(java.lang.String,java.lang.String,java.lang.String,java.lang.String) throws java.lang.Exception
+
+CLSS public final org.netbeans.modules.gradle.java.spi.support.JavaToolchainSupport
+meth public org.netbeans.api.java.platform.JavaPlatform platformByHome(java.io.File)
+meth public static org.netbeans.modules.gradle.java.spi.support.JavaToolchainSupport getDefault()
+supr java.lang.Object
+hfds GRADLE_JDK_DIST,instance,platformCache
 

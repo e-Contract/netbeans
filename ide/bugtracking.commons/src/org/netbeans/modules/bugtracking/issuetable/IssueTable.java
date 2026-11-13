@@ -174,7 +174,7 @@ public class IssueTable implements MouseListener, AncestorListener, KeyListener,
         if (borderColor == null) borderColor = UIManager.getColor("controlShadow"); // NOI18N
         tableScrollPane.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, borderColor));
 
-        ImageIcon ic = new ImageIcon(ImageUtilities.loadImage("org/netbeans/modules/bugtracking/commons/resources/columns_16.png", true)); // NOI18N
+        ImageIcon ic = ImageUtilities.loadImageIcon("org/netbeans/modules/bugtracking/commons/resources/columns_16.png", true); // NOI18N
         colsButton = new javax.swing.JButton(ic);
         colsButton.getAccessibleContext().setAccessibleName(NbBundle.getMessage(TreeTableView.class, "ACN_ColumnsSelector")); //NOI18N
         colsButton.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(TreeTableView.class, "ACD_ColumnsSelector")); //NOI18N
@@ -444,7 +444,7 @@ public class IssueTable implements MouseListener, AncestorListener, KeyListener,
     }
 
     private void setFilterIntern(Filter filter) {
-        final List<IssueNode> filteredNodes = new ArrayList<IssueNode>(nodes.size());
+        final List<IssueNode> filteredNodes = new ArrayList<>(nodes.size());
         for (IssueNode node : nodes) {
             if (filter == null || filter.accept(node)) {
                 filteredNodes.add(node);
@@ -453,7 +453,7 @@ public class IssueTable implements MouseListener, AncestorListener, KeyListener,
         SwingUtilities.invokeLater(new Runnable() {
             @Override
             public void run() {
-                setTableModel(filteredNodes.toArray(new IssueNode[filteredNodes.size()]));
+                setTableModel(filteredNodes.toArray(new IssueNode[0]));
             }
         });
     }
@@ -654,7 +654,7 @@ public class IssueTable implements MouseListener, AncestorListener, KeyListener,
                 visible.add(d);
             }
         }
-        return visible.toArray(new ColumnDescriptor[visible.size()]);
+        return visible.toArray(new ColumnDescriptor[0]);
     }
 
     @Override
@@ -669,7 +669,7 @@ public class IssueTable implements MouseListener, AncestorListener, KeyListener,
     public void ancestorRemoved(AncestorEvent event) { }
 
     private void setModelProperties() {
-        List<ColumnDescriptor> properties = new ArrayList<ColumnDescriptor>(descriptors.length + (isSaved ? 2 : 0));
+        List<ColumnDescriptor> properties = new ArrayList<>(descriptors.length + (isSaved ? 2 : 0));
         int i = 0;
         for (; i < descriptors.length; i++) {
             ColumnDescriptor desc = descriptors[i];
@@ -689,7 +689,7 @@ public class IssueTable implements MouseListener, AncestorListener, KeyListener,
                 }
             }
         }
-        descriptors = properties.toArray(new ColumnDescriptor[properties.size()]);
+        descriptors = properties.toArray(new ColumnDescriptor[0]);
         tableModel.setProperties(descriptors);        
     }
 
@@ -758,7 +758,7 @@ public class IssueTable implements MouseListener, AncestorListener, KeyListener,
                 synchronized(cellActions) {
                     Cell cell = new Cell(row, column);
                     Set<CellAction> set = cellActions.get(cell);
-                    actions = set != null ? set.toArray(new CellAction[set.size()]) : null;
+                    actions = set != null ? set.toArray(new CellAction[0]) : null;
                 }
                 if(actions != null) {
                     for (CellAction cellAction : actions) {

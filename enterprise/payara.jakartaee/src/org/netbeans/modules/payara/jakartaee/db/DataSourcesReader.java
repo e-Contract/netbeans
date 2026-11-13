@@ -28,7 +28,7 @@ import org.netbeans.modules.payara.tooling.TaskState;
 import org.netbeans.modules.payara.tooling.admin.CommandGetProperty;
 import org.netbeans.modules.payara.tooling.admin.ResultMap;
 import org.netbeans.modules.payara.tooling.data.PayaraServer;
-import org.netbeans.modules.payara.tooling.data.PayaraVersion;
+import org.netbeans.modules.payara.tooling.data.PayaraPlatformVersionAPI;
 import org.netbeans.modules.payara.tooling.utils.StringPrefixTree;
 import org.netbeans.modules.j2ee.deployment.common.api.Datasource;
 
@@ -39,10 +39,7 @@ import org.netbeans.modules.j2ee.deployment.common.api.Datasource;
  */
 public class DataSourcesReader {
 
-    ////////////////////////////////////////////////////////////////////////////
     // Inner classes                                                          //
-    ////////////////////////////////////////////////////////////////////////////
-
     /**
      * Payara server <code>resource</code> property type.
      */
@@ -121,10 +118,7 @@ public class DataSourcesReader {
 
     }
 
-    ////////////////////////////////////////////////////////////////////////////
     // Class attributes                                                       //
-    ////////////////////////////////////////////////////////////////////////////
-
     /** Payara server JDBC data sources properties search pattern. */
     public static final String DATA_SOURCES_PATTERN = "resources.*";
 
@@ -141,17 +135,11 @@ public class DataSourcesReader {
     static final String DEFAULT_DATA_SOURCE_EE7
             = "java:comp/DefaultDataSource";
 
-    ////////////////////////////////////////////////////////////////////////////
     // Instance attributes                                                    //
-    ////////////////////////////////////////////////////////////////////////////
-
     /** Payara server to read data sources from. */
     private final PayaraServer server;
 
-    ////////////////////////////////////////////////////////////////////////////
     // Constructors                                                           //
-    ////////////////////////////////////////////////////////////////////////////
-
     /**
      * Creates an instance of Payara server data sources reader.
      * <p/>
@@ -161,10 +149,7 @@ public class DataSourcesReader {
         this.server = server;
     }
 
-    ////////////////////////////////////////////////////////////////////////////
     // Methods                                                                //
-    ////////////////////////////////////////////////////////////////////////////
-
     /**
      * Retrieve data sources from Payara server.
      * <p/>
@@ -179,8 +164,7 @@ public class DataSourcesReader {
             buildJDBCContentObjects(properties, pools, resources);
             assignConnectionPoolsToResources(pools, resources);
             // Add Java EE 7 comp/DefaultDataSource data source (since PF 4).
-            if (server.getVersion().ordinal()
-                    >= PayaraVersion.PF_4_1_144.ordinal()) {
+            if (server.getPlatformVersion().isEE7Supported()) {
                 addNewJavaEE7dataSource(resources);
             }
             return new HashSet<>(resources.values());

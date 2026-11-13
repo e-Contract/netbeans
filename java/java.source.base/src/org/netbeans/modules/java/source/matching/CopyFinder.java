@@ -24,6 +24,7 @@ import com.sun.source.tree.ArrayTypeTree;
 import com.sun.source.tree.AssertTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.BinaryTree;
+import com.sun.source.tree.BindingPatternTree;
 import com.sun.source.tree.BlockTree;
 import com.sun.source.tree.BreakTree;
 import com.sun.source.tree.CaseTree;
@@ -71,7 +72,6 @@ import com.sun.source.tree.WhileLoopTree;
 import com.sun.source.tree.WildcardTree;
 import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
-import com.sun.tools.javac.api.JavacScope;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.comp.AttrContext;
 import com.sun.tools.javac.comp.Enter;
@@ -100,6 +100,7 @@ import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.ErrorType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import org.netbeans.api.annotations.common.CheckForNull;
@@ -107,7 +108,6 @@ import org.netbeans.api.annotations.common.NonNull;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.TreeUtilities;
 import org.netbeans.modules.java.source.JavaSourceAccessor;
-import org.netbeans.modules.java.source.TreeShims;
 
 /**TODO: tested by CopyFinderTest in java.hints module.
  *
@@ -324,6 +324,10 @@ public class CopyFinder extends ErrorAwareTreeScanner<Boolean, TreePath> {
 
         if (designed != null && designed.getKind() != TypeKind.ERROR) {
             TypeMirror real = info.getTrees().getTypeMirror(currentPath);
+            if (real != null && real.getKind() == TypeKind.ERROR) {
+                ErrorType et = (ErrorType) real;
+                real = info.getTrees().getOriginalType(et);
+            }
             if (real != null && !IGNORE_KINDS.contains(real.getKind())) {
                 // special hack: if the designed type is DECLARED (assuming a boxed primitive) and the real type is 
                 // not DECLARED or is null (assuming a real primitive), do not treat them as assignable.
@@ -1111,7 +1115,10 @@ public class CopyFinder extends ErrorAwareTreeScanner<Boolean, TreePath> {
         if (!checkLists(node.getTypeParameters(), t.getTypeParameters(), p))
             return false;
 
-        if (!scan(node.getReturnType(), t.getReturnType(), p))
+        Tree normalizedReturnType = "<init>".contentEquals(node.getName()) ? null : node.getReturnType();
+        Tree normalizedReturnTypePattern = "<init>".contentEquals(t.getName()) ? null : t.getReturnType();
+
+        if (!scan(normalizedReturnType, normalizedReturnTypePattern, p))
             return false;
 
         String name = t.getName().toString();
@@ -1516,6 +1523,13 @@ public class CopyFinder extends ErrorAwareTreeScanner<Boolean, TreePath> {
         if (!scan(node.getExpression(), t.getExpression(), p))
             return false;
 
+        Tree nodePattern = node.getPattern();
+        Tree pPattern = t.getPattern();
+
+        if (nodePattern != null || pPattern != null) {
+            return scan(nodePattern, pPattern, p);
+        }
+
         return scan(node.getType(), t.getType(), p);
     }
 
@@ -1620,7 +1634,7 @@ public class CopyFinder extends ErrorAwareTreeScanner<Boolean, TreePath> {
 
         MemberReferenceTree t = (MemberReferenceTree) p.getLeaf();
         
-        if (!node.getMode().equals(t.getMode()))
+        if (node.getMode() != t.getMode())
             return false;
 
         if (!scan(node.getQualifierExpression(), t.getQualifierExpression(), p))
@@ -1638,6 +1652,16 @@ public class CopyFinder extends ErrorAwareTreeScanner<Boolean, TreePath> {
         }
 
         return node.getName().contentEquals(t.getName());
+    }
+
+    public Boolean visitBindingPattern(BindingPatternTree node, TreePath p) {
+        if (p == null) {
+            return super.visitBindingPattern(node, p);
+        }
+
+        BindingPatternTree t = (BindingPatternTree) p.getLeaf();
+
+        return scan(node.getVariable(), t.getVariable(), p);
     }
 
 //
@@ -1837,8 +1861,8 @@ public class CopyFinder extends ErrorAwareTreeScanner<Boolean, TreePath> {
                 CaseTree caseTree = (CaseTree) firstLeaf.getParentPath().getLeaf();
                 if (caseTree.getStatements() != null) {
                     return caseTree.getStatements();
-                } else if (TreeShims.getBody(caseTree) instanceof StatementTree) {
-                    return Collections.singletonList((StatementTree) TreeShims.getBody(caseTree));
+                } else if (caseTree.getBody() instanceof StatementTree) {
+                    return Collections.singletonList((StatementTree) caseTree.getBody());
                 } else {
                     return null;
                 }

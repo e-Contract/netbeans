@@ -73,8 +73,7 @@ public class CssRuleCreateActionDialog extends javax.swing.JPanel {
             htmlTagsModel1.addElement(htmlTags[i]);
         }
 
-        DefaultComboBoxModel htmlTagsModel = new DefaultComboBoxModel();
-        //htmlTagsModel.addElement(NONE);
+        DefaultComboBoxModel<String> htmlTagsModel = new DefaultComboBoxModel<>();
         for( int i=0; i< htmlTags.length; i++){
             htmlTagsModel.addElement(htmlTags[i]);
         }
@@ -468,7 +467,7 @@ public class CssRuleCreateActionDialog extends javax.swing.JPanel {
                 }   break;
             case ELEMENT_ID_TYPE:
                 if(!selectElementIdTextField.getText().trim().equals("")){
-                    rule = "#" + selectElementIdTextField.getText().trim();;
+                    rule = "#" + selectElementIdTextField.getText().trim();
                 }   break;
         }
         if((rule != null) && (!selectedRules.contains(rule))){
@@ -496,7 +495,7 @@ public class CssRuleCreateActionDialog extends javax.swing.JPanel {
                 }   break;
             case ELEMENT_ID_TYPE:
                 if(!selectElementIdTextField.getText().trim().equals("")){
-                    rule = "#" + selectElementIdTextField.getText().trim();;
+                    rule = "#" + selectElementIdTextField.getText().trim();
                 }   break;
         }
         return rule;

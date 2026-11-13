@@ -19,6 +19,7 @@
 package org.netbeans.modules.payara.tooling.data;
 
 import java.util.Optional;
+import org.netbeans.modules.payara.tooling.server.parser.JvmConfigReader;
 
 public final class JDKVersion {
 
@@ -47,10 +48,15 @@ public final class JDKVersion {
      */
     private final Optional<String> vendor;
 
-    private final static int MAJOR_INDEX = 0;
-    private final static int MINOR_INDEX = 1;
-    private final static int SUBMINOR_INDEX = 2;
-    private final static int UPDATE_INDEX = 3;
+    /**
+     * JDK vm
+     */
+    private final Optional<String> vm;
+
+    private static final int MAJOR_INDEX = 0;
+    private static final int MINOR_INDEX = 1;
+    private static final int SUBMINOR_INDEX = 2;
+    private static final int UPDATE_INDEX = 3;
 
     private static JDKVersion IDE_JDK_VERSION;
 
@@ -58,21 +64,23 @@ public final class JDKVersion {
 
     private static final Short DEFAULT_VALUE = 0;
 
-    private JDKVersion(String version, String vendor) {
+    private JDKVersion(String version, String vendor, String vm) {
         short[] versions = parseVersions(version);
         this.major = versions[MAJOR_INDEX];
         this.minor = Optional.ofNullable(versions[MINOR_INDEX]);
         this.subminor = Optional.ofNullable(versions[SUBMINOR_INDEX]);
         this.update = Optional.ofNullable(versions[UPDATE_INDEX]);
         this.vendor = Optional.ofNullable(vendor);
+        this.vm = Optional.ofNullable(vm);
     }
 
-    JDKVersion(Short major, Optional<Short> minor, Optional<Short> subminor, Optional<Short> update, Optional<String> vendor) {
+    JDKVersion(Short major, Optional<Short> minor, Optional<Short> subminor, Optional<Short> update, Optional<String> vendor, Optional<String> vm) {
         this.major = major;
         this.minor = minor;
         this.subminor = subminor;
         this.update = update;
         this.vendor = vendor;
+        this.vm = vm;
     }
 
     /**
@@ -112,12 +120,21 @@ public final class JDKVersion {
     }
 
     /**
-     * Get JDK Vendor.
+     * Get JDK Vendor name.
      *
      * @return JDK vendor.
      */
     public Optional<String> getVendor() {
         return vendor;
+    }
+
+    /**
+     * Get JDK VM name.
+     *
+     * @return JDK vm.
+     */
+    public Optional<String> getVM() {
+        return vm;
     }
 
     public boolean gt(JDKVersion version) {
@@ -241,7 +258,7 @@ public final class JDKVersion {
 
     public static JDKVersion toValue(String version) {
         if (version != null && version.matches(VERSION_MATCHER)) {
-            return new JDKVersion(version, null);
+            return new JDKVersion(version, null, null);
         } else {
             return null;
         }
@@ -249,7 +266,15 @@ public final class JDKVersion {
 
     public static JDKVersion toValue(String version, String vendor) {
         if (version != null && version.matches(VERSION_MATCHER)) {
-            return new JDKVersion(version, vendor);
+            return new JDKVersion(version, vendor, null);
+        } else {
+            return null;
+        }
+    }
+
+    public static JDKVersion toValue(String version, String vendor, String vm) {
+        if (version != null && version.matches(VERSION_MATCHER)) {
+            return new JDKVersion(version, vendor, vm);
         } else {
             return null;
         }
@@ -259,27 +284,51 @@ public final class JDKVersion {
         return IDE_JDK_VERSION;
     }
 
-    public static boolean isCorrectJDK(JDKVersion jdkVersion, Optional<String> vendor, Optional<JDKVersion> minVersion, Optional<JDKVersion> maxVersion) {
+    public boolean isOptionSupported(
+            JvmConfigReader.JvmOption jvmOption,
+            String javaHome) {
+
         boolean correctJDK = true;
 
-        if (vendor.isPresent()) {
-            if (jdkVersion.getVendor().isPresent()) {
-                correctJDK = jdkVersion.getVendor().get().contains(vendor.get());
-            } else {
-                correctJDK = false;
-            }
+        if (jvmOption.vendorOrVM.isPresent()) {
+            correctJDK
+                    = this.getVendor()
+                            .map(v -> v.contains(jvmOption.vendorOrVM.get()))
+                            .orElse(false)
+                    || this.getVM()
+                            .map(vm -> vm.contains(jvmOption.vendorOrVM.get()))
+                            .orElse(false);
         }
-        if (correctJDK && minVersion.isPresent()) {
-            correctJDK = jdkVersion.ge(minVersion.get());
+
+        if (correctJDK && jvmOption.minVersion.isPresent()) {
+            correctJDK = this.ge(jvmOption.minVersion.get());
         }
-        if (correctJDK && maxVersion.isPresent()) {
-            correctJDK = jdkVersion.le(maxVersion.get());
+
+        if (correctJDK && jvmOption.maxVersion.isPresent()) {
+            correctJDK = this.le(jvmOption.maxVersion.get());
+        }
+
+        if (correctJDK
+                && jvmOption.option != null
+                && jvmOption.option.matches("^-XX:[+-]?CRaC.*")) {
+
+            correctJDK = this.isCRaCSupported(javaHome);
         }
         return correctJDK;
     }
 
-    public static boolean isCorrectJDK(Optional<JDKVersion> minVersion, Optional<JDKVersion> maxVersion) {
-        return isCorrectJDK(IDE_JDK_VERSION, Optional.empty(), minVersion, maxVersion);
+    /**
+     * Checks whether the given JDK installation supports CRaC by verifying the
+     * presence of the lib/criu directory.
+     *
+     * @param javaHome Java home directory to check
+     * @return true if CRaC-enabled JDK
+     */
+    private boolean isCRaCSupported(String javaHome) {
+        return Optional.ofNullable(javaHome)
+                .map(home -> new java.io.File(home, "lib/criu"))
+                .map(java.io.File::exists)
+                .orElse(false);
     }
 
     static {
@@ -288,6 +337,7 @@ public final class JDKVersion {
 
     private static void initialize() {
         String vendor = System.getProperty("java.vendor"); // NOI18N
+        String vm = System.getProperty("java.vm.name"); // NOI18N
         /*
             In JEP 223 java.specification.version will be a single number versioning , not a dotted versioning . 
             For JDK 8:
@@ -308,7 +358,8 @@ public final class JDKVersion {
                 Optional.of(versions[MINOR_INDEX]),
                 Optional.of(versions[SUBMINOR_INDEX]),
                 Optional.of(versions[UPDATE_INDEX]),
-                Optional.of(vendor)
+                Optional.of(vendor),
+                Optional.of(vm)
         );
     }
 

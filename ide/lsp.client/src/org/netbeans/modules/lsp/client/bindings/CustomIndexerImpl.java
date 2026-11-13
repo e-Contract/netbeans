@@ -21,9 +21,13 @@ package org.netbeans.modules.lsp.client.bindings;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.api.editor.mimelookup.MimeRegistration;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
@@ -34,7 +38,6 @@ import org.netbeans.modules.parsing.spi.indexing.CustomIndexerFactory;
 import org.netbeans.modules.parsing.spi.indexing.Indexable;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.util.EditableProperties;
 import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
 
@@ -48,8 +51,13 @@ public class CustomIndexerImpl extends CustomIndexer {
 
     @Override
     protected void index(Iterable<? extends Indexable> files, Context context) {
+        FileObject root = context.getRoot();
+
+        if (root == null) {
+            return ; //ignore
+        }
+
         handleStoredFiles(context, props -> {
-            FileObject root = context.getRoot();
             for (Indexable i : files) {
                 FileObject file = root.getFileObject(i.getRelativePath());
                 if (file != null) {
@@ -57,8 +65,8 @@ public class CustomIndexerImpl extends CustomIndexer {
                 }
             }
 
-            Set<String> mimeTypes = new HashSet<>(props.values());
-            System.err.println("mimeTypes=" + mimeTypes);
+            @SuppressWarnings("unchecked")
+            Set<String> mimeTypes = new HashSet<>((Collection) props.values());
             Project prj = FileOwnerQuery.getOwner(root);
 
             if (prj != null) {
@@ -73,19 +81,19 @@ public class CustomIndexerImpl extends CustomIndexer {
 
     private static final String INDEX_FILE_NAME = "index.properties";
 
-    private static void handleStoredFiles(Context context, Consumer<EditableProperties> handleProperties) {
-        EditableProperties props = new EditableProperties(true);
+    private static void handleStoredFiles(Context context, Consumer<Properties> handleProperties) {
+        Properties props = new Properties();
         FileObject index = context.getIndexFolder().getFileObject(INDEX_FILE_NAME);
 
         if (index != null) {
             try (InputStream in = index.getInputStream()) {
-                props.load(in);
-            } catch (IOException ex) {
-                //ignore...
+                props.load(in); // can throw IAE when illegal characters are read
+            } catch (IOException | IllegalArgumentException ex) {
+                Logger.getLogger(CustomIndexerImpl.class.getName()).log(Level.WARNING, "can not load '"+FileUtil.toFile(index)+"', resetting", ex);
             }
         }
 
-        EditableProperties old = props.cloneProperties();
+        Properties old = (Properties) props.clone();
 
         handleProperties.accept(props);
 
@@ -95,7 +103,7 @@ public class CustomIndexerImpl extends CustomIndexer {
                     index = context.getIndexFolder().createData(INDEX_FILE_NAME);
                 }
                 try (OutputStream out = index.getOutputStream()) {
-                    props.store(out);
+                    props.store(out, "");
                 }
             } catch (IOException ex) {
                 Exceptions.printStackTrace(ex);

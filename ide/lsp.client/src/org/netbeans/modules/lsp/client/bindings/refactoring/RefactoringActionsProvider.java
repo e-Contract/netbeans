@@ -19,10 +19,13 @@
 
 package org.netbeans.modules.lsp.client.bindings.refactoring;
 
+import java.util.List;
 import javax.swing.Action;
 import javax.swing.JEditorPane;
 import javax.swing.SwingUtilities;
+import javax.swing.text.AbstractDocument;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.Caret;
 import javax.swing.text.Document;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.ReferenceContext;
@@ -64,24 +67,87 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
                 try {
                     JEditorPane c = ec.getOpenedPanes()[0];
                     Document doc = c.getDocument();
+                    AbstractDocument abstractDoc = (doc instanceof AbstractDocument) ? ((AbstractDocument) doc) : null;
                     FileObject file = NbEditorUtilities.getFileObject(doc);
-                    LSPBindings bindings = LSPBindings.getBindings(file);
-                    int caretPos = c.getCaretPosition();
+                    List<LSPBindings> servers = LSPBindings.getBindings(file);
+                    Caret caret = c.getCaret();
+                    if(caret == null) {
+                        return;
+                    }
+                    int caretPos = caret.getDot();
                     Position pos = Utils.createPosition(doc, caretPos);
                     ReferenceParams params = new ReferenceParams();
                     params.setTextDocument(new TextDocumentIdentifier(Utils.toURI(file)));
                     params.setPosition(pos);
                     params.setContext(new ReferenceContext(false)); //(could be an option?)
-                    TokenSequence<?> ts = TokenHierarchy.get(doc).tokenSequence();
+
                     String name = Bundle.NM_Unknown();
-                    if (ts != null) {
-                        ts.move(caretPos);
-                        if (ts.moveNext()) {
-                            name = ts.token().text().toString();
+
+                    if (abstractDoc != null) {
+                        abstractDoc.readLock();
+                    }
+                    try {
+                        TokenSequence<?> ts = TokenHierarchy.get(doc).tokenSequence();
+                        if (ts != null) {
+                            ts.move(caretPos);
+                            if (ts.moveNext()) {
+                                name = ts.token().text().toString();
+                            }
+                        }
+                    } finally {
+                        if (abstractDoc != null) {
+                            abstractDoc.readUnlock();
                         }
                     }
 
-                    UI.openRefactoringUI(new RefactoringUIImpl(bindings, params, name),
+                    UI.openRefactoringUI(new WhereUsedRefactoringUIImpl(new LSPBindingsCollection(servers), params, name),
+                                         TopComponent.getRegistry().getActivated());
+                } catch (BadLocationException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
+        };
+        SwingUtilities.invokeLater(start);
+    }
+
+    @Override
+    public void doRename(Lookup lookup) {
+        Runnable start = () -> {
+            EditorCookie ec = lookup.lookup(EditorCookie.class);
+
+            if (isFromEditor(ec)) {
+                try {
+                    JEditorPane c = ec.getOpenedPanes()[0];
+                    Document doc = c.getDocument();
+                    AbstractDocument abstractDoc = (doc instanceof AbstractDocument) ? ((AbstractDocument) doc) : null;
+                    FileObject file = NbEditorUtilities.getFileObject(doc);
+                    List<LSPBindings> servers = LSPBindings.getBindings(file);
+                    Caret caret = c.getCaret();
+                    if(caret == null) {
+                        return;
+                    }
+                    int caretPos = caret.getDot();
+                    Position pos = Utils.createPosition(doc, caretPos);
+                    String name;
+                    if(abstractDoc != null) {
+                        abstractDoc.readLock();
+                    }
+                    try {
+                        TokenSequence<?> ts = TokenHierarchy.get(doc).tokenSequence();
+                        name = "";
+                        if (ts != null) {
+                            ts.move(caretPos);
+                            if (ts.moveNext()) {
+                                name = ts.token().text().toString();
+                            }
+                        }
+                    } finally {
+                        if (abstractDoc != null) {
+                            abstractDoc.readUnlock();
+                        }
+                    }
+
+                    UI.openRefactoringUI(new RenameRefactoringUIImpl(new LSPBindingsCollection(servers), file, pos, name),
                                          TopComponent.getRegistry().getActivated());
                 } catch (BadLocationException ex) {
                     Exceptions.printStackTrace(ex);
@@ -99,24 +165,28 @@ public class RefactoringActionsProvider extends ActionsImplementationProvider{
 
     @Override
     public boolean canFindUsages(Lookup lookup) {
-        LSPBindings bindings = getBindings(lookup);
-        if (bindings == null) {
-            return false;
-        }
-        Boolean hasReferences = bindings.getInitResult().getCapabilities().getReferencesProvider();
-        return hasReferences != null && hasReferences;
+        List<LSPBindings> servers = getBindings(lookup);
+
+        return servers.stream().anyMatch(server -> Utils.isEnabled(server.getInitResult().getCapabilities().getReferencesProvider()));
     }
 
-    private LSPBindings getBindings(Lookup lookup) {
+    @Override
+    public boolean canRename(Lookup lookup) {
+        List<LSPBindings> servers = getBindings(lookup);
+
+        return servers.stream().anyMatch(server -> Utils.isEnabled(server.getInitResult().getCapabilities().getRenameProvider()));
+    }
+
+    private List<LSPBindings> getBindings(Lookup lookup) {
         EditorCookie ec = lookup.lookup(EditorCookie.class);
         if (isFromEditor(ec)) {
             JEditorPane c = ec.getOpenedPanes()[0];
             Document doc = c.getDocument();
             FileObject file = NbEditorUtilities.getFileObject(doc);
-            LSPBindings bindings = file != null ? LSPBindings.getBindings(file) : null;
-            return bindings;
+            List<LSPBindings> servers = file != null ? LSPBindings.getBindings(file) : List.of();
+            return servers;
         }
-        return null;
+        return List.of();
     }
 
     public static boolean isFromEditor(EditorCookie ec) {

@@ -33,16 +33,14 @@ import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementVisitor;
 import javax.lang.model.element.ModuleElement;
 import javax.lang.model.element.Name;
 import javax.lang.model.element.PackageElement;
+import javax.lang.model.element.RecordComponentElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.util.ElementScanner9;
 import javax.tools.JavaFileObject;
-import org.netbeans.modules.java.source.TreeShims;
-import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
 
 /**
@@ -101,14 +99,14 @@ public final class FQN2Files {
                     }
                 }
                 return null;
-            }  
+            }
+            @Override
+            public Object visitRecordComponent(RecordComponentElement e, Object p) {
+                return visitVariable((VariableElement) e, p);
+            }
             @Override
             public Object scan(Element e, Object p) {
-                if (TreeShims.isRecordComponent(e)) {
-                    return visitVariable((VariableElement) e, p);
-                } else {
-                    return super.scan(e, p);
-                }
+                return super.scan(e, p);
             }
         }.scan(topLevelElements, null);
     }

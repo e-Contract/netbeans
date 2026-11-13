@@ -72,14 +72,14 @@ public class SourceGroupSupport {
     public static SourceGroup[] getJavaSourceGroups(Project project) {
         SourceGroup[] sourceGroups = ProjectUtils.getSources(project).getSourceGroups(
                 JavaProjectConstants.SOURCES_TYPE_JAVA);
-        Set testGroups = getTestSourceGroups(sourceGroups);
+        Set<SourceGroup> testGroups = getTestSourceGroups(sourceGroups);
         List<SourceGroup> result = new ArrayList<>();
         for (int i = 0; i < sourceGroups.length; i++) {
             if (!testGroups.contains(sourceGroups[i])) {
                 result.add(sourceGroups[i]);
             }
         }
-        return (SourceGroup[]) result.toArray(new SourceGroup[result.size()]);
+        return result.toArray(new SourceGroup[0]);
     }
 
     public static boolean isValidPackageName(String packageName) {
@@ -169,7 +169,7 @@ public class SourceGroupSupport {
     private static Map createFoldersToSourceGroupsMap(final SourceGroup[] sourceGroups) {
         Map<FileObject, SourceGroup> result;
         if (sourceGroups.length == 0) {
-            result = Collections.EMPTY_MAP;
+            result = Collections.<FileObject, SourceGroup>emptyMap();
         } else {
             result = new HashMap<>(2 * sourceGroups.length, .5f);
             for (int i = 0; i < sourceGroups.length; i++) {
@@ -180,9 +180,9 @@ public class SourceGroupSupport {
         return result;
     }
 
-    private static Set/*<SourceGroup>*/ getTestSourceGroups(SourceGroup[] sourceGroups) {
+    private static Set<SourceGroup> getTestSourceGroups(SourceGroup[] sourceGroups) {
         Map foldersToSourceGroupsMap = createFoldersToSourceGroupsMap(sourceGroups);
-        Set testGroups = new HashSet();
+        Set<SourceGroup> testGroups = new HashSet<>();
         for (int i = 0; i < sourceGroups.length; i++) {
             testGroups.addAll(getTestTargets(sourceGroups[i], foldersToSourceGroupsMap));
         }
@@ -197,7 +197,7 @@ public class SourceGroupSupport {
         List<SourceGroup> result = new ArrayList<>();
         List<FileObject> sourceRoots = getFileObjects(rootURLs, true);
         for (int i = 0; i < sourceRoots.size(); i++) {
-            FileObject sourceRoot = (FileObject) sourceRoots.get(i);
+            FileObject sourceRoot = sourceRoots.get(i);
             SourceGroup srcGroup = (SourceGroup) foldersToSourceGroupsMap.get(sourceRoot);
             if (srcGroup != null) {
                 result.add(srcGroup);

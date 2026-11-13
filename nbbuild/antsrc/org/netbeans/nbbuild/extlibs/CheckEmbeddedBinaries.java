@@ -26,10 +26,13 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
+
 import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.Project;
 import org.apache.tools.ant.Task;
@@ -84,7 +87,7 @@ public class CheckEmbeddedBinaries extends Task {
 
                     if (MavenCoordinate.isMavenFile(hashAndFile[1])) {
                         MavenCoordinate mc = MavenCoordinate.fromGradleFormat(hashAndFile[1]);
-                        shamap.put(hashAndFile[0], hashAndFile[1]);
+                        shamap.put(hashAndFile[0], mc.toArtifactFilename());
                     } else {
                         throw new BuildException("Invalid manifest entry should be Maven coordinate", getLocation());
                     }
@@ -94,14 +97,16 @@ public class CheckEmbeddedBinaries extends Task {
             throw new BuildException("Could not open " + manifest + ": " + x, x, getLocation());
 
         }
-        try {
+        try (Stream<Path> list = Files.list(dir.toPath())) {
             StringBuilder errorList = new StringBuilder();
-            Files.list(dir.toPath())
-                    .forEach((t) -> {
+            list.forEach((t) -> {
                         String sha1 = hash(t.toFile());
-                        if (!shamap.containsKey(sha1)) {
-                            errorList.append("No sha1 (expected ").append(sha1).append(" for file: ").append(t).append("\n");
-                        }                          
+                        String filename = shamap.get(sha1);
+                        if (filename == null) {
+                            errorList.append("No sha1 (expected ").append(sha1).append(" for file: ").append(t.getFileName()).append("\n");
+                        } else if (!filename.equals(t.getFileName().toString())) {
+                            errorList.append("Wrong filename for hash (expected ").append(filename).append(" but got: ").append(t.getFileName()).append("\n");
+                        }
                     });
             if (errorList.toString().length()>0) {
                 log(""+errorList.toString());
@@ -140,115 +145,4 @@ public class CheckEmbeddedBinaries extends Task {
         return String.format("%040X", new BigInteger(1, digest.digest()));
     }
 
-    static class MavenCoordinate {
-
-        private final String groupId;
-        private final String artifactId;
-        private final String version;
-        private final String extension;
-        private final String classifier;
-
-        private MavenCoordinate(String groupId, String artifactId, String version, String extension, String classifier) {
-            this.groupId = groupId;
-            this.artifactId = artifactId;
-            this.version = version;
-            this.extension = extension;
-            this.classifier = classifier;
-        }
-
-        public boolean hasClassifier() {
-            return (!classifier.isEmpty());
-        }
-
-        public String getGroupId() {
-            return groupId;
-        }
-
-        public String getArtifactId() {
-            return artifactId;
-        }
-
-        public String getVersion() {
-            return version;
-        }
-
-        public String getExtension() {
-            return extension;
-        }
-
-        public String getClassifier() {
-            return classifier;
-        }
-
-        /**
-         * @return filename of the artifact by maven convention:
-         * {@code artifact-version[-classifier].extension}
-         */
-        public String toArtifactFilename() {
-            return String.format("%s-%s%s.%s",
-                    getArtifactId(),
-                    getVersion(),
-                    hasClassifier() ? ("-" + getClassifier()) : "",
-                    getExtension()
-            );
-        }
-
-        /**
-         * @return The repository path for an artifact by maven convention:
-         * {@code group/artifact/version/artifact-version[-classifier].extension}.
-         * In the group part all dots are replaced by a slash.
-         */
-        public String toMavenPath() {
-            return String.format("%s/%s/%s/%s",
-                    getGroupId().replace(".", "/"),
-                    getArtifactId(),
-                    getVersion(),
-                    toArtifactFilename()
-            );
-        }
-
-        public static boolean isMavenFile(String gradleFormat) {
-            return gradleFormat.split(":").length > 2;
-        }
-
-        /**
-         * The maven coordinate is supplied in the form:
-         *
-         * <p>
-         * {@code group:name:version:classifier@extension}</p>
-         *
-         * <p>
-         * For the DownloadBinaries task the parts group, name and version are
-         * requiered. classifier and extension are optional. The extension has a
-         * default value of "jar".
-         *
-         * @param gradleFormat artifact coordinated to be parse as a
-         * MavenCoordinate
-         * @return
-         * @throws IllegalArgumentException if provided string fails to parse
-         */
-        public static MavenCoordinate fromGradleFormat(String gradleFormat) {
-            if (!isMavenFile(gradleFormat)) {
-                throw new IllegalArgumentException("Supplied string is not in gradle dependency format: " + gradleFormat);
-            }
-            String[] coordinateExtension = gradleFormat.split("@", 2);
-            String extension;
-            String coordinate = coordinateExtension[0];
-            if (coordinateExtension.length > 1
-                    && (!coordinateExtension[1].trim().isEmpty())) {
-                extension = coordinateExtension[1];
-            } else {
-                extension = "jar";
-            }
-            String[] coordinates = coordinate.split(":");
-            String group = coordinates[0];
-            String artifact = coordinates[1];
-            String version = coordinates[2];
-            String classifier = "";
-            if (coordinates.length > 3) {
-                classifier = coordinates[3].trim();
-            }
-            return new MavenCoordinate(group, artifact, version, extension, classifier);
-        }
-    }
 }

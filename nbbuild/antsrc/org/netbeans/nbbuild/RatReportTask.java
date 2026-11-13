@@ -20,12 +20,11 @@ package org.netbeans.nbbuild;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -57,6 +56,13 @@ import org.xml.sax.SAXException;
  * @author skygo
  */
 public class RatReportTask extends Task {
+
+    private static final FileFilter DIRECTORY_FILTER = new FileFilter() {
+        @Override
+        public boolean accept(File file) {
+            return file.isDirectory() && (! file.isHidden());
+        }
+    };
 
     private File sourceFile;
     private File root;
@@ -92,8 +98,8 @@ public class RatReportTask extends Task {
     @Override
     public void execute() throws BuildException {
         root = sourceFile.getParentFile().getParentFile().getParentFile();
-        File[] modulesFolder = root.listFiles();
-        String repository = "";
+        File[] clusterFolders = root.listFiles(DIRECTORY_FILTER);
+        String repository = null;
         // get repository information from git
         //try {
         List<String> commandAndArgs = new ArrayList<>();
@@ -123,8 +129,8 @@ public class RatReportTask extends Task {
         // build map to get cluster and module related from cluster.properties
         Set<String> moduleDB = new HashSet<>();
         Map<String, Set<String>> modulebycluster = new TreeMap<>();
-        for (File module : modulesFolder) {
-            if (module.isDirectory() && !module.isHidden()) {
+        for (File clusterFolder : clusterFolders) {
+            for(File module: clusterFolder.listFiles(DIRECTORY_FILTER)) {
                 moduleDB.add(module.getName());
                 moduleRATInfo.put(module.getName(), new ModuleInfo(module));
             }
@@ -225,9 +231,9 @@ public class RatReportTask extends Task {
     }
 
     private void doPopulateUnapproved(Map<String, ModuleInfo> moduleRATInfo, Element rootElement, XPath path) throws XPathExpressionException {
-        NodeList evaluate = (NodeList) path.evaluate("descendant::resource[license-approval/@name=\"false\"]", rootElement, XPathConstants.NODESET);
+        NodeList evaluate = (NodeList) path.evaluate("descendant::resource[license/@approval=\"false\"]", rootElement, XPathConstants.NODESET);
         for (int i = 0; i < evaluate.getLength(); i++) {
-            String resources = relativize(evaluate.item(i).getAttributes().getNamedItem("name").getTextContent());
+            String resources = evaluate.item(i).getAttributes().getNamedItem("name").getTextContent();
             String moduleName = getModuleName(resources);
             if (!moduleRATInfo.containsKey(moduleName)) {
                 moduleRATInfo.get(NOT_CLUSTER).addUnapproved(resources);
@@ -238,9 +244,9 @@ public class RatReportTask extends Task {
     }
 
     private void doPopulateApproved(Map<String, ModuleInfo> moduleRATInfo, Element rootElement, XPath path) throws XPathExpressionException {
-        NodeList evaluate = (NodeList) path.evaluate("descendant::resource[license-approval/@name=\"true\"]", rootElement, XPathConstants.NODESET);
+        NodeList evaluate = (NodeList) path.evaluate("descendant::resource[license/@approval=\"true\"]", rootElement, XPathConstants.NODESET);
         for (int i = 0; i < evaluate.getLength(); i++) {
-            String resources = relativize(evaluate.item(i).getAttributes().getNamedItem("name").getTextContent());
+            String resources = evaluate.item(i).getAttributes().getNamedItem("name").getTextContent();
             String moduleName = getModuleName(resources);
             if (!moduleRATInfo.containsKey(moduleName)) {
                 moduleRATInfo.get(NOT_CLUSTER).addApproved(resources);
@@ -251,30 +257,21 @@ public class RatReportTask extends Task {
         }
     }
 
-    private String relativize(String target) {
-        Path full = Paths.get(target);
-        Path rootPath = root.toPath();
-        return rootPath.relativize(full).toString();
-    }
-
     private String getModuleName(String resource) {
         String moduleName;
-        if (!resource.contains(File.separator)) {
+        int firstSeparator = resource.indexOf(File.separator);
+        int secondSeparator = resource.indexOf(File.separator, firstSeparator + 1);
+        if (firstSeparator == -1 || secondSeparator == -1) {
             moduleName = NOT_CLUSTER;
         } else {
-            moduleName = resource.substring(0, resource.indexOf(File.separator));
+            moduleName = resource.substring(firstSeparator + 1, secondSeparator);
         }
         return moduleName;
     }
 
     class ModuleInfo {
-// approved resource list
-// very simple string for now.
-
         private final Set<String> approved = new HashSet<>();
-        // unapproved resource list
         private final Set<String> unapproved = new HashSet<>();
-
         private final Set<String> external = new HashSet<>();
         private final File folder;
 

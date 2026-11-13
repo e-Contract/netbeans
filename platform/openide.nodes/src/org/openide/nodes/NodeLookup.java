@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import org.openide.util.Lookup.Template;
@@ -44,7 +45,7 @@ final class NodeLookup extends AbstractLookup {
     private final AggregatingExecutor EXECUTOR = new AggregatingExecutor();
 
     /** Set of Classes that we have already queried <type>Class</type> */
-    private java.util.Collection<Class> queriedCookieClasses = new ArrayList<Class>();
+    private Collection<Class> queriedCookieClasses = new ArrayList<>();
 
     /** node we are associated with
      */
@@ -64,7 +65,7 @@ final class NodeLookup extends AbstractLookup {
      *
      * @param node node to ask
      * @param c class to query
-     * @param colleciton to put Pair into if found
+     * @param collection to put Pair into if found
      */
     private static void addCookie(Node node, Class<?> c, 
             Collection<AbstractLookup.Pair> collection, 
@@ -213,8 +214,8 @@ final class NodeLookup extends AbstractLookup {
             }
         }
 
-        java.util.ArrayList<AbstractLookup.Pair> list = new java.util.ArrayList<AbstractLookup.Pair>(instances);
-        java.util.Collections.sort(list, new Cmp());
+        List<AbstractLookup.Pair> list = new ArrayList<>(instances);
+        list.sort(new Cmp());
 
         if (toAdd == null) {
             setPairs(list);

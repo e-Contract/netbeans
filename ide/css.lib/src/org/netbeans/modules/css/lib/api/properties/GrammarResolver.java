@@ -106,7 +106,8 @@ public class GrammarResolver {
         this.globalValues = new ValueGrammarElement[]{
             new FixedTextGrammarElement(this.grammar, "inherit", "inherit"),
             new FixedTextGrammarElement(this.grammar, "initial", "initial"),
-            new FixedTextGrammarElement(this.grammar, "unset", "unset")
+            new FixedTextGrammarElement(this.grammar, "unset", "unset"),
+            new FixedTextGrammarElement(this.grammar, "revert", "revert"),
         };
     }
     
@@ -287,12 +288,12 @@ public class GrammarResolver {
                     InputState beforeState = createInputState();
                     List<ValueGrammarElement> matching = new ArrayList<>(globalValues.length);
                     for(ValueGrammarElement vge: globalValues) {
-                        backupInputState(beforeState);
                         if(processValue(vge)) {
                             matching.add(vge);
                         } else {
                             valueNotAccepted(vge);
                         }
+                        backupInputState(beforeState);
                     }
                     if(! matching.isEmpty()) {
                         boolean matched = processValue(matching.get(0));

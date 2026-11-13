@@ -24,7 +24,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import org.netbeans.modules.payara.tooling.data.JDKVersion;
 import org.openide.util.Exceptions;
 
 /**
@@ -36,10 +35,7 @@ import org.openide.util.Exceptions;
  */
 public class StartupArgsEntity implements StartupArgs {
 
-    ////////////////////////////////////////////////////////////////////////////
     // Instance attributes                                                    //
-    ////////////////////////////////////////////////////////////////////////////
-
     /** Command line arguments passed to bootstrap jar. */
     private List<String>payaraArgs;
 
@@ -55,10 +51,7 @@ public class StartupArgsEntity implements StartupArgs {
     /** Version of Java SDK used to run Payara. */
     private JDKVersion javaVersion;
 
-    ////////////////////////////////////////////////////////////////////////////
     // Constructors                                                           //
-    ////////////////////////////////////////////////////////////////////////////
-
     /**
      * Constructs empty class instance. No default values are set.
      */
@@ -82,10 +75,7 @@ public class StartupArgsEntity implements StartupArgs {
         this.javaHome = javaHome;
     }
 
-    ////////////////////////////////////////////////////////////////////////////
     // Getters and Setters                                                    //
-    ////////////////////////////////////////////////////////////////////////////
-
     /**
      * Get command line arguments passed to bootstrap jar.
      * <p/>
@@ -188,7 +178,8 @@ public class StartupArgsEntity implements StartupArgs {
                     if (javaVersionLine != null) {
                         javaVersion = JDKVersion.toValue(
                                 javaVersionLine.substring(javaVersionLine.indexOf("\"") + 1, javaVersionLine.lastIndexOf("\"")), // NOI18N
-                                implementorLine != null ? implementorLine.substring(implementorLine.indexOf("\"") + 1, implementorLine.lastIndexOf("\"")) : null // NOI18N
+                                implementorLine != null ? implementorLine.substring(implementorLine.indexOf("\"") + 1, implementorLine.lastIndexOf("\"")) : null, // NOI18N
+                                null
                         );
                     }
                 } catch (IOException ex) {

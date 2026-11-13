@@ -27,10 +27,15 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+
 import org.netbeans.api.sendopts.CommandException;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
+import org.openide.util.Pair;
 
 @NbBundle.Messages({
     "# {0} - specification to parse",
@@ -42,7 +47,10 @@ import org.openide.util.NbBundle;
 final class ConnectionSpec implements Closeable {
     private final Boolean listen;
     private final int port;
-    private final List<Closeable> close = new ArrayList<>();
+    // @GuardedBy (this)
+    private final List<Closeable> close = new CopyOnWriteArrayList<>();
+    // @GuardedBy (this)
+    private final List<Closeable> closed = new ArrayList<>();
 
     private ConnectionSpec(Boolean listen, int port) {
         this.listen = listen;
@@ -75,10 +83,28 @@ final class ConnectionSpec implements Closeable {
         }
     }
 
-    public void prepare(String prefix, InputStream in, OutputStream out, BiConsumer<InputStream, OutputStream> launcher) throws IOException {
+    public <ServerType extends LspSession.ScheduledServer> void prepare(
+            String prefix, InputStream in, OutputStream out, LspSession session,
+            BiConsumer<LspSession, ServerType> serverSetter,
+            BiFunction<Pair<InputStream, OutputStream>, LspSession, ServerType> launcher) throws IOException {
+
         if (listen == null) {
             // stdio
-            launcher.accept(in, out);
+            ServerType connectionObject = launcher.apply(Pair.of(in, out), session);
+            serverSetter.accept(session, connectionObject);
+            try {
+                connectionObject.getRunningFuture().get();
+            } catch (InterruptedException ex) {
+                Exceptions.printStackTrace(ex);
+            } catch (ExecutionException ex) {
+                Throwable cause = ex.getCause();
+                if (cause instanceof Error) {
+                    throw (Error) cause;
+                }
+                Exceptions.printStackTrace(ex);
+            } finally {
+                serverSetter.accept(session, null);
+            }
         } else if (listen) {
             // listen on TCP
             ServerSocket server = new ServerSocket(port, 1, Inet4Address.getLoopbackAddress());
@@ -88,45 +114,72 @@ final class ConnectionSpec implements Closeable {
                 @Override
                 public void run() {
                     while (true) {
+                        Socket socket = null;
                         try {
-                            Socket socket = server.accept();
+                            socket = server.accept();
                             close.add(socket);
-                            connectToSocket(socket, prefix, launcher);
+                            connectToSocket(socket, prefix, session, serverSetter, launcher);
                         } catch (IOException ex) {
+                            if (isClosed(server)) {
+                                break;
+                            }
                             Exceptions.printStackTrace(ex);
                         }
                     }
                 }
             };
             listeningThread.start();
-            out.write((prefix + " listening at port " + localPort).getBytes());
+            out.write((prefix + " listening at port " + localPort + "\n").getBytes());
             out.flush();
         } else {
             // connect to TCP
             final Socket socket = new Socket(Inet4Address.getLoopbackAddress(), port);
-            connectToSocket(socket, prefix, launcher);
+            connectToSocket(socket, prefix, session, serverSetter, launcher);
         }
     }
 
-    private void connectToSocket(final Socket socket, String prefix, BiConsumer<InputStream, OutputStream> launcher) {
+    private <ServerType extends LspSession.ScheduledServer> void connectToSocket(
+            final Socket socket, String prefix, LspSession session,
+            BiConsumer<LspSession, ServerType> serverSetter,
+            BiFunction<Pair<InputStream, OutputStream>, LspSession, ServerType> launcher) {
+
         final int connectTo = socket.getPort();
         Thread connectedThread = new Thread(prefix + " connected to " + connectTo) {
             @Override
             public void run() {
                 try {
-                    launcher.accept(socket.getInputStream(), socket.getOutputStream());
-                } catch (IOException ex) {
-                    Exceptions.printStackTrace(ex);
+                    ServerType connectionObject = launcher.apply(Pair.of(socket.getInputStream(), socket.getOutputStream()), session);
+                    serverSetter.accept(session, connectionObject);
+                    connectionObject.getRunningFuture().get();
+                } catch (IOException | InterruptedException | ExecutionException ex) {
+                    if (!isClosed(socket)) {
+                        Exceptions.printStackTrace(ex);
+                    }
+                } finally {
+                    serverSetter.accept(session, null);
                 }
             }
         };
         connectedThread.start();
     }
+    
+    private boolean isClosed(Closeable c) {
+        synchronized (this) {
+            return closed.contains(c);
+        }
+    }
 
     @Override
     public void close() throws IOException {
-        for (Closeable c : close) {
-            c.close();
+        synchronized (this) {
+            for (Closeable c : close) {
+                try {
+                    c.close();
+                    closed.add(c);
+                } catch (IOException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+            }
         }
     }
 }

@@ -28,6 +28,8 @@ import java.util.List;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.Task;
+import org.netbeans.api.java.source.TestUtilities;
+import org.netbeans.api.java.source.TestUtilities.TestInput;
 import org.netbeans.api.java.source.TreePathHandle;
 import org.netbeans.modules.refactoring.api.Problem;
 import org.netbeans.modules.refactoring.api.RefactoringSession;
@@ -843,6 +845,75 @@ public class RenameTest extends RefactoringTestBase {
 
     }
     
+    public void testRenameLocalVariable_1() throws Exception { // see NETBEANS-4274 
+        writeFilesAndWaitForScan(src,
+                new File("t/X.java", "package t;\n"
+                + "public class X {\n"
+                + "    private static int i;\n"
+                + "    public static void main(String[] args) {\n"
+                + "        X x = new X();\n"
+                + "        String newName = Integer.toString(x.i);\n"
+                + "    }\n"
+                + "}"));
+        JavaRenameProperties props = new JavaRenameProperties();
+        performRename(src.getFileObject("t/X.java"), 1, -1, "newName", props, true);
+        verifyContent(src,
+                new File("t/X.java", "package t;\n"
+                + "public class X {\n"
+                + "    private static int newName;\n"
+                + "    public static void main(String[] args) {\n"
+                + "        X x = new X();\n"
+                + "        String newName = Integer.toString(x.newName);\n"
+                + "    }\n"
+                + "}"));
+    }       
+    
+    public void testRenameLocalVariable_2() throws Exception { // see NETBEANS-4274 
+        writeFilesAndWaitForScan(src,
+                new File("t/X.java", "package t;\n"
+                + "public class X {\n"
+                + "    private int i;\n"
+                + "    public static void main(String[] args) {\n"
+                + "        X x = new X();\n"
+                + "        String newName = Integer.toString(x.i);\n"
+                + "    }\n"
+                + "}"));
+        JavaRenameProperties props = new JavaRenameProperties();
+        performRename(src.getFileObject("t/X.java"), 1, -1, "newName", props, true);
+        verifyContent(src,
+                new File("t/X.java", "package t;\n"
+                + "public class X {\n"
+                + "    private int newName;\n"
+                + "    public static void main(String[] args) {\n"
+                + "        X x = new X();\n"
+                + "        String newName = Integer.toString(x.newName);\n"
+                + "    }\n"
+                + "}"));
+    }      
+    
+    public void testRenameLocalVariable_3() throws Exception { // see NETBEANS-4274 
+        writeFilesAndWaitForScan(src,
+                new File("t/X.java", "package t;\n"
+                + "public class X {\n"
+                + "    private static int i;\n"
+                + "    public static void main(String[] args) {\n"
+                + "        X x = new X();\n"
+                + "        String newName = Integer.toString(i);\n"
+                + "    }\n"
+                + "}"));
+        JavaRenameProperties props = new JavaRenameProperties();
+        performRename(src.getFileObject("t/X.java"), 1, -1, "newName", props, true);
+        verifyContent(src,
+                new File("t/X.java", "package t;\n"
+                + "public class X {\n"
+                + "    private static int newName;\n"
+                + "    public static void main(String[] args) {\n"
+                + "        X x = new X();\n"
+                + "        String newName = Integer.toString(X.newName);\n"
+                + "    }\n"
+                + "}"));
+    }      
+    
     public void test253063() throws Exception {
         writeFilesAndWaitForScan(src,
                 new File("t/A.java", "package t;\n"
@@ -1483,6 +1554,81 @@ public class RenameTest extends RefactoringTestBase {
 
     }
 
+    public void testRenameBindingVariableType() throws Exception {
+        if (!typeTestPatternAvailable()) return; //only run the test when javac supports it
+        writeFilesAndWaitForScan(src,
+                new File("t/A.java", "package t;\n"
+                + "public class A {\n"
+                + "    public boolean taragui(Object o) {\n"
+                + "        return o instanceof A a && a.toString() != null;\n"
+                + "    }\n"
+                + "}"));
+        JavaRenameProperties props = new JavaRenameProperties();
+        performRename(src.getFileObject("t/A.java"), 25, "B", props, true);
+        verifyContent(src,
+                new File("t/A.java", "package t;\n"
+                + "public class B {\n"
+                + "    public boolean taragui(Object o) {\n"
+                + "        return o instanceof B a && a.toString() != null;\n"
+                + "    }\n"
+                + "}"));
+
+    }
+
+    public void testRenameClassInAnnotation() throws Exception {
+        TestInput input = TestUtilities.splitCodeAndPos("""
+                                                        package t;
+                                                        public class T|est {
+                                                        }
+                                                        """);
+
+        writeFilesAndWaitForScan(src,
+                new File("t/Test.java", input.code()),
+                new File("t/Ann.java",
+                         """
+                         package t;
+                         @interface Ann {
+                             public Class<?> value();
+                         }
+                         """),
+                new File("t/Use.java",
+                         """
+                         package t;
+                         public class Use {
+                             @Ann(Test.class)
+                             void t1() {}
+                             @Ann({Test.class})
+                             void t2() {}
+                         }
+                         """));
+        JavaRenameProperties props = new JavaRenameProperties();
+        performRename(src.getFileObject("t/Test.java"), input.pos(), "NewName", props, true);
+        verifyContent(src,
+                new File("t/Test.java",
+                         """
+                         package t;
+                         public class NewName {
+                         }
+                         """),
+                new File("t/Ann.java",
+                         """
+                         package t;
+                         @interface Ann {
+                             public Class<?> value();
+                         }
+                         """),
+                new File("t/Use.java",
+                         """
+                         package t;
+                         public class Use {
+                             @Ann(NewName.class)
+                             void t1() {}
+                             @Ann({NewName.class})
+                             void t2() {}
+                         }
+                         """));
+    }
+
     private void performRename(FileObject source, final int position, final int position2, final String newname, final JavaRenameProperties props, final boolean searchInComments, Problem... expectedProblems) throws Exception {
         final RenameRefactoring[] r = new RenameRefactoring[1];
         JavaSource.forFileObject(source).runUserActionTask(new Task<CompilationController>() {
@@ -1556,5 +1702,15 @@ public class RenameTest extends RefactoringTestBase {
         }
 
         assertProblems(Arrays.asList(expectedProblems), problems);
+    }
+
+    private boolean typeTestPatternAvailable() {
+        try {
+            Class.forName("com.sun.source.tree.BindingPatternTree", false, Tree.class.getClassLoader()).getDeclaredMethod("getVariable");
+            return true;
+        } catch (ClassNotFoundException | NoSuchMethodException | SecurityException ex) {
+            //OK
+            return false;
+        }
     }
 }

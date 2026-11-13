@@ -45,6 +45,7 @@ import org.eclipse.jgit.lib.RebaseTodoLine;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.lib.RepositoryState;
+import org.eclipse.jgit.merge.MergeAttributes;
 import org.eclipse.jgit.merge.RecursiveMerger;
 import org.eclipse.jgit.merge.ResolveMerger;
 import org.eclipse.jgit.merge.StrategyRecursive;
@@ -210,7 +211,7 @@ public class CherryPickCommand extends GitCommand {
                 org.eclipse.jgit.api.CherryPickCommand command = new Git(repository).cherryPick();
                 command.include(ids.iterator().next());
                 if (workAroundStrategyIssue) {
-                    command.setStrategy(new FailuresDetectRecurciveStrategy());
+                    command.setStrategy(new FailuresDetectRecursiveStrategy());
                 }
                 res = command.call();
                 if (res.getStatus() == CherryPickResult.CherryPickStatus.OK) {
@@ -412,8 +413,7 @@ public class CherryPickCommand extends GitCommand {
         return Collections.<RebaseTodoLine>emptyList();
     }
 
-    private static final Attributes NO_ATTRIBUTES = new Attributes();
-    private class FailuresDetectRecurciveStrategy extends StrategyRecursive {
+    private class FailuresDetectRecursiveStrategy extends StrategyRecursive {
 
         @Override
         public ThreeWayMerger newMerger (Repository db) {
@@ -423,12 +423,16 @@ public class CherryPickCommand extends GitCommand {
         @Override
         public ThreeWayMerger newMerger (Repository db, boolean inCore) {
             return new RecursiveMerger(db, inCore) {
+                @Override
                 protected boolean mergeTreeWalk (TreeWalk treeWalk, boolean ignoreConflicts)
                         throws IOException {
                     boolean ok = true;
                     boolean hasWorkingTreeIterator = tw.getTreeCount() > T_FILE;
                     boolean hasAttributeNodeProvider = treeWalk.getAttributesNodeProvider() != null;
                     while (treeWalk.next()) {
+                        MergeAttributes attributes = hasAttributeNodeProvider
+                                ? new TreeWalkAttributes(treeWalk)
+                                : MergeAttributes.NO_ATTRIBUTES;
                         if (!processEntry(
                                 treeWalk.getTree(T_BASE, CanonicalTreeParser.class),
                                 treeWalk.getTree(T_OURS, CanonicalTreeParser.class),
@@ -436,8 +440,7 @@ public class CherryPickCommand extends GitCommand {
                                 treeWalk.getTree(T_INDEX, DirCacheBuildIterator.class),
                                 hasWorkingTreeIterator ? treeWalk.getTree(T_FILE, WorkingTreeIterator.class) : null,
                                 ignoreConflicts,
-                                hasAttributeNodeProvider ? treeWalk.getAttributes() : NO_ATTRIBUTES
-                        )) {
+                                attributes)) {
                             ok = false;
                         }
                         if (treeWalk.isSubtree() && enterSubtree) {
@@ -445,9 +448,24 @@ public class CherryPickCommand extends GitCommand {
                         }
                     }
                     if (!ok) {
-                        cleanUp();
+                        workTreeUpdater.revertModifiedFiles();
                     }
                     return ok;
+                }
+
+                private record TreeWalkAttributes(TreeWalk walk) implements MergeAttributes {
+                    @Override
+                    public Attributes base() {
+                        return walk.getAttributes(T_BASE);
+                    }
+                    @Override
+                    public Attributes ours() {
+                        return walk.getAttributes(T_OURS);
+                    }
+                    @Override
+                    public Attributes theirs() {
+                        return walk.getAttributes(T_THEIRS);
+                    }
                 }
             };
         }

@@ -342,6 +342,25 @@ public class JavaCompletionTask18FeaturesTest extends CompletionTestBase {
         performTest("LambdaExpression", 986, "return (String s", "stringVarName.pass", "1.8");
     }
 
+    public void testEffectivellyFinal() throws Exception {
+        performTest("Final", 1125, "var", "effectivellyFinal.pass", "1.8");
+    }
+
+    public void testDiamond1() throws Exception {
+        performTest("Empty", 808,
+                """
+                package test;
+                public class Test {
+                    public static class Test<T> {
+                        public Test(T value) { }
+                        public Test(String name, T value) { }
+                    }
+                    private static void test() {
+                        new Test<>
+                """,
+                "diamond1.pass", "1.8");
+    }
+
     static {
         JavacParser.DISABLE_SOURCE_LEVEL_DOWNGRADE = true;
     }

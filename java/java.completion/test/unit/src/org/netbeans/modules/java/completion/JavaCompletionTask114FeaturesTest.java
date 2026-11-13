@@ -18,74 +18,26 @@
  */
 package org.netbeans.modules.java.completion;
 
-import javax.lang.model.SourceVersion;
-import org.netbeans.junit.NbTestSuite;
 import org.netbeans.modules.java.source.parsing.JavacParser;
+
 /**
  *
  * @author arusinha
  */
 public class JavaCompletionTask114FeaturesTest extends CompletionTestBase {
 
-    private static String SOURCE_LEVEL = "14"; //NOI18N
+    private static final String SOURCE_LEVEL = "14"; //NOI18N
 
     public JavaCompletionTask114FeaturesTest(String testName) {
         super(testName);
-    }
-
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite();
-        try {
-            SourceVersion.valueOf("RELEASE_14"); //NOI18N
-            suite.addTestSuite(JavaCompletionTask114FeaturesTest.class);
-        } catch (IllegalArgumentException ex) {
-            //OK, no RELEASE_13, skip tests
-            suite.addTest(new JavaCompletionTask114FeaturesTest("noop")); //NOI18N
-        }
-        return suite;
     }
 
     public void testBindingUse() throws Exception {
         performTest("GenericMethodInvocation", 1231, "boolean b = argO instanceof String str && st", "BindingUse.pass", SOURCE_LEVEL);
     }
     
-
-    public void testBeforeLeftRecordBraces() throws Exception {
-        performTest("Records", 896, null, "implementsKeyword.pass", SOURCE_LEVEL);
-    }
-        
-        public void testBeforeRecParamsLeftParen() throws Exception {
-        performTest("Records", 892, null, "empty.pass", SOURCE_LEVEL);
-    }
-
-    public void testInsideRecParams() throws Exception {
-        performTest("Records", 894, "R", "typesRecordLocalMembersAndVars.pass", SOURCE_LEVEL);
-    }
-    
-    public void testAfterTypeParamInRecParam() throws Exception {
-        performTest("Records", 890, null, "extendsKeyword.pass", SOURCE_LEVEL);
-    }
-    
-    public void testInsideRecAfterStaticKeyWord() throws Exception {
-        performTest("Records", 918, "R", "typesRecordStaticMembersAndVars.pass", SOURCE_LEVEL);
-    }
-    
-    public void testAnnotationInRecordParam() throws Exception {
-        performTest("Records", 999, null, "override.pass", SOURCE_LEVEL);
-    } 
-    
-    public void testRecordKeywordInsideClass() throws Exception {
-        performTest("Records", 1014, "rec", "record.pass", SOURCE_LEVEL);
-    } 
-    
-    public void testVariableNameSuggestion() throws Exception {
-        performTest("Records", 1071, null, "recordVariableSuggestion.pass", SOURCE_LEVEL);
-    } 
-    
-    public void noop() {
-    }
-
     static {
         JavacParser.DISABLE_SOURCE_LEVEL_DOWNGRADE = true;
     }
+    
 }

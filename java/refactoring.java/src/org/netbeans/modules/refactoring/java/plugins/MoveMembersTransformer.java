@@ -70,7 +70,7 @@ public class MoveMembersTransformer extends RefactoringVisitor {
     public MoveMembersTransformer(MoveRefactoring refactoring) {
         allElements = refactoring.getRefactoringSource().lookupAll(TreePathHandle.class);
         JavaMoveMembersProperties properties = refactoring.getContext().lookup(JavaMoveMembersProperties.class);
-        properties = properties == null ? new JavaMoveMembersProperties(allElements.toArray(new TreePathHandle[allElements.size()])) : properties;
+        properties = properties == null ? new JavaMoveMembersProperties(allElements.toArray(new TreePathHandle[0])) : properties;
         visibility = properties.getVisibility();
         usageOutsideOfPackage = new HashMap<>();
         usageOutsideOfType = new HashMap<>();
@@ -189,7 +189,7 @@ public class MoveMembersTransformer extends RefactoringVisitor {
             rewrite(oldT, newT);
         } else {
             SourcePositions positions = workingCopy.getTrees().getSourcePositions();
-            long startPosition = positions.getStartPosition(workingCopy.getCompilationUnit(), node);
+            long startPosition = positions.getStartPosition(node);
             long lineNumber = workingCopy.getCompilationUnit().getLineMap().getLineNumber(startPosition);
             String source = FileUtil.getFileDisplayName(workingCopy.getFileObject()) + ':' + lineNumber;
             problem = JavaPluginUtils.chainProblems(problem, new Problem(false, NbBundle.getMessage(MoveMembersRefactoringPlugin.class, "WRN_NoAccessor", source))); //NOI18N
@@ -227,7 +227,7 @@ public class MoveMembersTransformer extends RefactoringVisitor {
                 });
                 if (!vars.iterator().hasNext()) {
                     SourcePositions positions = workingCopy.getTrees().getSourcePositions();
-                    long startPosition = positions.getStartPosition(workingCopy.getCompilationUnit(), node);
+                    long startPosition = positions.getStartPosition(node);
                     long lineNumber = workingCopy.getCompilationUnit().getLineMap().getLineNumber(startPosition);
                     String source = FileUtil.getFileDisplayName(workingCopy.getFileObject()) + ':' + lineNumber;
                     problem = JavaPluginUtils.chainProblems(problem, new Problem(false, NbBundle.getMessage(MoveMembersRefactoringPlugin.class, "WRN_NoAccessor", source))); //NOI18N
@@ -268,7 +268,7 @@ public class MoveMembersTransformer extends RefactoringVisitor {
             });
             if (!vars.iterator().hasNext()) {
                 SourcePositions positions = workingCopy.getTrees().getSourcePositions();
-                    long startPosition = positions.getStartPosition(workingCopy.getCompilationUnit(), node);
+                    long startPosition = positions.getStartPosition(node);
                     long lineNumber = workingCopy.getCompilationUnit().getLineMap().getLineNumber(startPosition);
                     String source = FileUtil.getFileDisplayName(workingCopy.getFileObject()) + ':' + lineNumber;
                     problem = JavaPluginUtils.chainProblems(problem, new Problem(false, NbBundle.getMessage(MoveMembersTransformer.class, "WRN_NoAccessor", source))); //NOI18N
@@ -312,7 +312,7 @@ public class MoveMembersTransformer extends RefactoringVisitor {
         TreePath enclosingClassPath = JavaRefactoringUtils.findEnclosingClass(workingCopy, currentPath, true, true, true, true, true);
         Element enclosingElement = workingCopy.getTrees().getElement(enclosingClassPath);
 
-        final LinkedList<ExpressionTree> arguments = new LinkedList(node.getArguments());
+        final LinkedList<ExpressionTree> arguments = new LinkedList<>(node.getArguments());
         ExpressionTree newMethodSelect;
 
         if (el.getModifiers().contains(Modifier.STATIC)) {
@@ -356,7 +356,7 @@ public class MoveMembersTransformer extends RefactoringVisitor {
                         problem = JavaPluginUtils.chainProblems(problem, new Problem(false, NbBundle.getMessage(MoveMembersTransformer.class, "WRN_NoAccessor", NbBundle.getMessage(MoveMembersTransformer.class, "TXT_DelegatingMethod"))));
                     } else {
                         SourcePositions positions = workingCopy.getTrees().getSourcePositions();
-                        long startPosition = positions.getStartPosition(workingCopy.getCompilationUnit(), node);
+                        long startPosition = positions.getStartPosition(node);
                         long lineNumber = workingCopy.getCompilationUnit().getLineMap().getLineNumber(startPosition);
                         String source = FileUtil.getFileDisplayName(workingCopy.getFileObject()) + ':' + lineNumber;
                         problem = JavaPluginUtils.chainProblems(problem, new Problem(false, NbBundle.getMessage(MoveMembersTransformer.class, "WRN_NoAccessor", source))); //NOI18N
@@ -392,7 +392,7 @@ public class MoveMembersTransformer extends RefactoringVisitor {
                     if (enclosingElement.equals(target)) {
                         if(inStatic) {
                             SourcePositions positions = workingCopy.getTrees().getSourcePositions();
-                            long startPosition = positions.getStartPosition(workingCopy.getCompilationUnit(), node);
+                            long startPosition = positions.getStartPosition(node);
                             long lineNumber = workingCopy.getCompilationUnit().getLineMap().getLineNumber(startPosition);
                             String source = FileUtil.getFileDisplayName(workingCopy.getFileObject()) + ':' + lineNumber;
                             problem = JavaPluginUtils.chainProblems(problem, new Problem(false, NbBundle.getMessage(MoveMembersTransformer.class, "WRN_NoAccessor", source))); //NOI18N
@@ -460,9 +460,6 @@ public class MoveMembersTransformer extends RefactoringVisitor {
                     return (r1 == Boolean.TRUE || r2 == Boolean.TRUE);
                 }
             };
-            if (workingCopy.getTrees().getTree(el) == null) {
-                System.err.println("!!!");
-            }
             Boolean needsArgument = needsArgumentScanner.scan(workingCopy.getTrees().getTree(el).getBody(), sourceType);
             if (needsArgument == Boolean.TRUE) {
                 ExpressionTree newArgument;
@@ -911,8 +908,8 @@ public class MoveMembersTransformer extends RefactoringVisitor {
             builder.append("\n"); // NOI18N
         }
         boolean hasReturn = false;
-        if (returnType != null && returnType.getKind().equals(Tree.Kind.PRIMITIVE_TYPE)) {
-            if (!((PrimitiveTypeTree) returnType).getPrimitiveTypeKind().equals(TypeKind.VOID)) {
+        if (returnType != null && returnType.getKind() == Tree.Kind.PRIMITIVE_TYPE) {
+            if (((PrimitiveTypeTree) returnType).getPrimitiveTypeKind() != TypeKind.VOID) {
                 hasReturn = true;
             }
         }

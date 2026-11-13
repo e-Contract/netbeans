@@ -52,7 +52,6 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Elements;
 import javax.lang.model.util.Elements.Origin;
 import org.netbeans.api.annotations.common.CheckForNull;
 import org.netbeans.api.annotations.common.NonNull;
@@ -243,7 +242,7 @@ public class ElementScanningTask implements CancellableTask<CompilationInfo>{
         public Context visitClass(ClassTree node, Void p) {
             Element e = this.trees.getElement(this.getCurrentPath());
             if (e != null) {
-                long pos = this.sourcePositions.getStartPosition(cu, node);
+                long pos = this.sourcePositions.getStartPosition(node);
                 ctx.pos.put(e, pos);
             }
             return super.visitClass(node, p);
@@ -253,7 +252,7 @@ public class ElementScanningTask implements CancellableTask<CompilationInfo>{
         public Context visitMethod(MethodTree node, Void p) {
             Element e = this.trees.getElement(this.getCurrentPath());
             if (e != null) {
-                long pos = this.sourcePositions.getStartPosition(cu, node);
+                long pos = this.sourcePositions.getStartPosition(node);
                 ctx.pos.put(e, pos);
             }
             return null;
@@ -263,7 +262,7 @@ public class ElementScanningTask implements CancellableTask<CompilationInfo>{
         public Context visitVariable(VariableTree node, Void p) {
             Element e = this.trees.getElement(this.getCurrentPath());
             if (e != null) {
-                long pos = this.sourcePositions.getStartPosition(cu, node);
+                long pos = this.sourcePositions.getStartPosition(node);
                 ctx.pos.put(e, pos);
             }
             return null;
@@ -273,13 +272,13 @@ public class ElementScanningTask implements CancellableTask<CompilationInfo>{
         public Context visitModule(ModuleTree node, Void p) {
             final ModuleElement module = (ModuleElement) trees.getElement(getCurrentPath());
             if (module != null) {
-                ctx.pos.put(module, this.sourcePositions.getStartPosition(cu, node));
+                ctx.pos.put(module, this.sourcePositions.getStartPosition(node));
                 final List<? extends ModuleElement.Directive> de = module.getDirectives();
                 final List<? extends DirectiveTree> dt = node.getDirectives();
                 for (int i = 0, j = 0; i < de.size() ; i++) {
                     if (isImportant(de.get(i))) {
                         ctx.directives.put(de.get(i), dt.get(j));
-                        ctx.pos.put(de.get(i), this.sourcePositions.getStartPosition(cu, dt.get(j)));
+                        ctx.pos.put(de.get(i), this.sourcePositions.getStartPosition(dt.get(j)));
                         j += 1;
                     }
                 }
@@ -360,7 +359,7 @@ public class ElementScanningTask implements CancellableTask<CompilationInfo>{
         } else if( e instanceof ExecutableElement ) {
             d.htmlHeader = createHtmlHeader(info,  (ExecutableElement)e, info.getElements().isDeprecated(e),d.isInherited, fqn, overridenFrom);
         } else if( e instanceof VariableElement ) {
-            if( !(e.getKind() == ElementKind.FIELD || e.getKind() == ElementKind.ENUM_CONSTANT || e.getKind().name().equals("STATE_COMPONENT")) )
+            if( !(e.getKind() == ElementKind.FIELD || e.getKind() == ElementKind.ENUM_CONSTANT || e.getKind() == ElementKind.RECORD_COMPONENT) )
                 return null;
             d.htmlHeader = createHtmlHeader(info,  (VariableElement)e, info.getElements().isDeprecated(e),d.isInherited, fqn );
         } else if (isModule) {

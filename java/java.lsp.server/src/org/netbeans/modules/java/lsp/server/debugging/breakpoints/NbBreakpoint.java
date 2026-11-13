@@ -18,7 +18,11 @@
  */
 package org.netbeans.modules.java.lsp.server.debugging.breakpoints;
 
+import com.sun.source.tree.LambdaExpressionTree;
+import com.sun.source.util.TreePathScanner;
+import java.io.IOException;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,15 +30,23 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.eclipse.lsp4j.Position;
 
 import org.eclipse.lsp4j.debug.BreakpointEventArguments;
 import org.eclipse.lsp4j.debug.Source;
 
 import org.netbeans.api.debugger.Breakpoint;
 import org.netbeans.api.debugger.DebuggerManager;
+import org.netbeans.api.debugger.jpda.JPDABreakpoint;
 import org.netbeans.api.debugger.jpda.LineBreakpoint;
+import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.modules.debugger.jpda.truffle.breakpoints.TruffleLineBreakpoint;
+import org.netbeans.modules.java.lsp.server.Utils;
 import org.netbeans.modules.java.lsp.server.debugging.DebugAdapterContext;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.URLMapper;
 
 /**
  *
@@ -48,16 +60,27 @@ public final class NbBreakpoint {
     private final Source source;
     private final String sourceURL;
     private int line;
+    private Integer column;
     private int hitCount;
     private String condition;
     private String logMessage;
     private final Map<Object, Object> properties = new HashMap<>();
     private Breakpoint breakpoint; // Either JPDA's LineBreakpoint, or TruffleLineBreakpoint
 
-    public NbBreakpoint(Source source, String sourceURL, int line, int hitCount, String condition, String logMessage, DebugAdapterContext context) {
+    public NbBreakpoint(Source source, String sourceURL, int line, Integer column, int hitCount, String condition, String logMessage, DebugAdapterContext context) {
         this.source = source;
+        Integer ref = source.getSourceReference();
+        if (ref != null && ref != 0) {
+            URI uri = context.getSourceUri(ref);
+            if (uri != null) {
+                try {
+                    sourceURL = uri.toURL().toString();
+                } catch (MalformedURLException ex) {}
+            }
+        }
         this.sourceURL = sourceURL;
         this.line = line;
+        this.column = column;
         this.hitCount = hitCount;
         this.condition = condition;
         this.logMessage = logMessage;
@@ -72,6 +95,10 @@ public final class NbBreakpoint {
         return line;
     }
 
+    public Integer getColumn() {
+        return column;
+    }
+
     public int getHitCount() {
         return hitCount;
     }
@@ -81,19 +108,53 @@ public final class NbBreakpoint {
             this.hitCount = hitCount;
             if (hitCount > 0) {
                 breakpoint.setHitCountFilter(hitCount, Breakpoint.HIT_COUNT_FILTERING_STYLE.GREATER);
+            } else {
+                breakpoint.setHitCountFilter(0, null);
             }
         }
     }
 
     public CompletableFuture<NbBreakpoint> install() {
         Breakpoint breakpoint;
-        if (sourceURL.toLowerCase().endsWith(".java")) {
+        String sourceURLLower = sourceURL.toLowerCase();
+        boolean isJava = sourceURLLower.endsWith(".java");      // NOI18N
+        boolean isScala = sourceURLLower.endsWith(".scala");      // NOI18N
+        boolean isGroovy = sourceURLLower.endsWith(".groovy");  // NOI18N
+        if (isScala) {
+          final Pattern PACKAGE = Pattern.compile("package *([\\p{Alnum}+\\.$]+) *");
+          try {
+              LineBreakpoint b = LineBreakpoint.create(sourceURL, line);
+
+              FileObject fo = URLMapper.findFileObject(new URL(sourceURL));
+              for (String code : fo.asLines()) {
+                  Matcher match = PACKAGE.matcher(code);
+                  if (match.matches()) {
+                      String pkg = match.group(1);
+                      int slash = sourceURL.lastIndexOf("/");
+                      int dot = sourceURL.indexOf('.', slash + 1);
+                      if (dot >= 0) {
+                          String filter = pkg + "." + sourceURL.substring(slash + 1, dot) + "*";
+                          b.setPreferredClassName(filter);
+                      }
+                      break;
+                  }
+              }
+              breakpoint = b;
+          } catch (IOException ex) {
+              throw new IllegalStateException(ex);
+          }
+        } else if (isJava || isGroovy) {
             LineBreakpoint b = LineBreakpoint.create(sourceURL, line);
             if (condition != null && !condition.isEmpty()) {
                 b.setCondition(condition);
             }
             if (logMessage != null && !logMessage.isEmpty()) {
-                b.setPrintText(logMessage);
+                String message = lsp2NBLogMessage(logMessage);
+                b.setPrintText(message);
+                b.setSuspend(JPDABreakpoint.SUSPEND_NONE);
+            }
+            if (column != null) {
+                b.setLambdaIndexes(getLambdaIndex(line, column));
             }
             breakpoint = b;
         } else {
@@ -108,6 +169,11 @@ public final class NbBreakpoint {
             if (condition != null && !condition.isEmpty()) {
                 b.setCondition(condition);
             }
+            if (logMessage != null && !logMessage.isEmpty()) {
+                String message = lsp2NBLogMessage(logMessage);
+                b.setPrintText(message);
+                b.setSuspend(false);
+            }
             breakpoint = b;
         }
         if (hitCount > 0) {
@@ -116,11 +182,46 @@ public final class NbBreakpoint {
         breakpoint.addPropertyChangeListener(Breakpoint.PROP_VALIDITY, evt -> {
             updateValid(breakpoint, true);
         });
-        updateValid(breakpoint, false);
         DebuggerManager d = DebuggerManager.getDebuggerManager();
         d.addBreakpoint(breakpoint);
+        updateValid(breakpoint, false);
         this.breakpoint = breakpoint;
         return CompletableFuture.completedFuture(this);
+    }
+
+    private int[] getLambdaIndex(int line, int column) {
+        try {
+            FileObject file = Utils.fromUri(sourceURL);
+            JavaSource js = JavaSource.forFileObject(file);
+            int[] index = new int[] { LineBreakpoint.LAMBDA_INDEX_STOP_OUTSIDE };
+            js.runUserActionTask(cc -> {
+                cc.toPhase(JavaSource.Phase.PARSED);
+                //TODO: span only!
+                new TreePathScanner<Void, Void>() {
+                    int idx = 0;
+                    public Void visitLambdaExpression(LambdaExpressionTree tree, Void v) {
+                        int startPos = (int) cc.getTrees().getSourcePositions().getStartPosition(tree);
+                        Position pos = Utils.createPosition(cc.getCompilationUnit().getLineMap(), startPos);
+                        if (line == pos.getLine() + 1) {
+                            if (column == pos.getCharacter() + 1) {
+                                index[0] = idx;
+                            } else {
+                                idx++;
+                            }
+                        }
+                        return super.visitLambdaExpression(tree, v);
+                    }
+                }.scan(cc.getCompilationUnit(), null);
+            }, true);
+            return index;
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+
+        return new int[0];
+    }
+    private static final String lsp2NBLogMessage(String message) {
+        return message.replaceAll("\\{([^\\}]+)\\}", "{=$1}");      // NOI18N
     }
 
     private void updateValid(Breakpoint breakpoint, boolean sendNotify) {
@@ -177,7 +278,7 @@ public final class NbBreakpoint {
             if (breakpoint instanceof LineBreakpoint) {
                 ((LineBreakpoint) breakpoint).setPrintText(logMessage);
             } else {
-                // no print text
+                ((TruffleLineBreakpoint) breakpoint).setPrintText(logMessage);
             }
         }
     }

@@ -39,19 +39,16 @@ import static org.netbeans.lib.profiler.utils.VMUtils.*;
 import org.openide.util.Enumerations;
 
 /**
- *
- * @author      Jaroslav Bachorik
- */
-/**
  * A helper class for OQL engine allowing easy access to the underlying
  * heapwalker model
+ * @author      Jaroslav Bachorik
  */
 public class Snapshot {
     private final Heap delegate;
     private JavaClass weakReferenceClass;
     private int referentFieldIndex;
     private ReachableExcludes reachableExcludes;
-    final private OQLEngine engine;
+    private final OQLEngine engine;
     
     public Snapshot(Heap heap, OQLEngine engine) {
         this.delegate = heap;
@@ -69,7 +66,7 @@ public class Snapshot {
             int fldsCount = flds.size();
 
             for (int i = 0; i < fldsCount; i++) {
-                if ("referent".equals(((Field) flds.get(i)).getName())) { // NOI18N
+                if ("referent".equals(flds.get(i).getName())) { // NOI18N
                     referentFieldIndex = i;
                     break;
                 }
@@ -278,7 +275,7 @@ public class Snapshot {
         Instance queue = (Instance) clazz.getValueOfStaticField("queue"); // NOI18N
         Instance head = (Instance) queue.getValueOfField("head"); // NOI18N
 
-        List finalizables = new ArrayList();
+        List<Instance> finalizables = new ArrayList<>();
         if (head != null) {
             while (true) {
                 Instance referent = (Instance) head.getValueOfField("referent"); // NOI18N
@@ -319,7 +316,7 @@ public class Snapshot {
 
     public GCRoot[] getRootsArray() {
         List<GCRoot> rootList = getRootsList();
-        return (GCRoot[]) rootList.toArray(new GCRoot[0]);
+        return rootList.toArray(new GCRoot[0]);
     }
    
     public ReferenceChain[] rootsetReferencesTo(Instance target, boolean includeWeak) {

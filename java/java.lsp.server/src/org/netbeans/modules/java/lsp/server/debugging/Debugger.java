@@ -20,12 +20,24 @@ package org.netbeans.modules.java.lsp.server.debugging;
 
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+
 import org.eclipse.lsp4j.debug.launch.DSPLauncher;
 import org.eclipse.lsp4j.debug.services.IDebugProtocolClient;
+import org.eclipse.lsp4j.jsonrpc.JsonRpcException;
 import org.eclipse.lsp4j.jsonrpc.Launcher;
-import org.openide.util.Exceptions;
+import org.eclipse.lsp4j.jsonrpc.MessageConsumer;
+import org.eclipse.lsp4j.jsonrpc.MessageIssueException;
+import org.eclipse.lsp4j.jsonrpc.messages.Message;
+import org.netbeans.modules.java.lsp.server.LspSession;
+import org.netbeans.modules.java.lsp.server.progress.OperationContext;
+
+import org.openide.util.Lookup;
+import org.openide.util.Pair;
+import org.openide.util.lookup.AbstractLookup;
+import org.openide.util.lookup.InstanceContent;
+import org.openide.util.lookup.Lookups;
+import org.openide.util.lookup.ProxyLookup;
 
 /**
  *
@@ -36,16 +48,62 @@ public final class Debugger {
     private Debugger() {
     }
 
-    public static void startDebugger(InputStream in, OutputStream out) {
-        final DebugAdapterContext context = new DebugAdapterContext();
+    public static NbProtocolServer startDebugger(Pair<InputStream, OutputStream> io, LspSession session) {
+        final DebugAdapterContext context = new DebugAdapterContext(session);
         NbProtocolServer server = new NbProtocolServer(context);
-        Launcher<IDebugProtocolClient> serverLauncher = DSPLauncher.createServerLauncher(server, in, out);
+
+        Launcher<IDebugProtocolClient> serverLauncher = DSPLauncher.createServerLauncher(
+                server, io.first(), io.second(), null, (d) -> new ConsumeWithLookup(d, session));
         context.setClient(serverLauncher.getRemoteProxy());
         Future<Void> runningServer = serverLauncher.startListening();
-        try {
-            runningServer.get();
-        } catch (InterruptedException | ExecutionException ex) {
-            Exceptions.printStackTrace(ex);
+        server.setRunningFuture(runningServer);
+        return server;
+    }
+
+    private static class ConsumeWithLookup implements MessageConsumer {
+        private final MessageConsumer delegate;
+        private final LspSession lspSession;
+        private OperationContext topContext;
+        private Lookup debugSessionLookup;
+
+        public ConsumeWithLookup(MessageConsumer delegate, LspSession session) {
+            this.delegate = delegate;
+            this.lspSession = session;
+        }
+        
+        @Override
+        public void consume(Message message) throws MessageIssueException, JsonRpcException {
+            InstanceContent ic = new InstanceContent();
+            Lookup ll = debugSessionLookup;
+            final OperationContext ctx;
+            if (ll == null) {
+                ll = new ProxyLookup(new AbstractLookup(ic), lspSession.getLookup());
+                synchronized (this) {
+                    if (debugSessionLookup == null) {
+                        debugSessionLookup = ll;
+                    }
+                }
+                // HACK: piggyback on LSP's client.
+            }
+            if (topContext == null) {
+                topContext = OperationContext.find(lspSession.getLookup());
+            }
+            if (topContext != null) {
+                ctx = topContext.operationContext();
+                ctx.disableCancels();
+                ic.add(ctx);
+            } else {
+                ctx = null;
+            }
+            Lookups.executeWith(ll, () -> {
+                try {
+                    delegate.consume(message);
+                } finally {
+                    if (ctx != null) {
+                        ctx.stop();
+                    }
+                }
+            });
         }
     }
 }
